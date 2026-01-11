@@ -1,0 +1,196 @@
+{
+  "version": "1.0",
+  "created": "2026-01-11",
+  "worktrees": [
+    {
+      "name": "main-develop",
+      "index": 1,
+      "branch": "develop",
+      "path": "/mnt/data/archie-platform-v2",
+      "ports": {
+        "postgres": 1000,
+        "redis": 1001,
+        "api": 1002,
+        "pgadmin": 1003,
+        "frontend": 1004
+      },
+      "containers": {
+        "postgres": "archie-main-dev-postgres",
+        "redis": "archie-main-dev-redis",
+        "api": "archie-main-dev-api",
+        "pgadmin": "archie-main-dev-pgadmin"
+      },
+      "network": "archie-main-dev-network",
+      "volumes": {
+        "postgres": "archie-main-dev-postgres-data",
+        "redis": "archie-main-dev-redis-data",
+        "file_uploads": "archie-main-dev-file-uploads"
+      },
+      "database": {
+        "name": "archie_dev",
+        "url": "postgresql://archie_user:archie_dev_password@localhost:1000/archie_dev"
+      },
+      "enabled": true,
+      "production": true,
+      "monitoring_agent": false,
+      "notes": "Main develop branch serving stuart.arch.ie - Manual control only"
+    },
+    {
+      "name": "communications-service",
+      "index": 3,
+      "branch": "requirements/communications-service-epics",
+      "path": "/mnt/data/archie-platform-v2-worktrees/communications-service",
+      "ports": {
+        "postgres": 3000,
+        "redis": 3001,
+        "api": 3002,
+        "pgadmin": 3003,
+        "frontend": 3004
+      },
+      "containers": {
+        "postgres": "archie-communications-service-postgres",
+        "redis": "archie-communications-service-redis",
+        "api": "archie-communications-service-api",
+        "pgadmin": "archie-communications-service-pgadmin"
+      },
+      "network": "archie-communications-service-network",
+      "volumes": {
+        "postgres": "archie-communications-service-postgres-data",
+        "redis": "archie-communications-service-redis-data",
+        "file_uploads": "archie-communications-service-file-uploads"
+      },
+      "database": {
+        "name": "archie_communications_service_dev",
+        "url": "postgresql://archie_user:archie_dev_password@localhost:3000/archie_communications_service_dev"
+      },
+      "enabled": true
+    },
+    {
+      "name": "copilot-integration",
+      "index": 4,
+      "branch": "fresh-work-session",
+      "path": "/mnt/data/archie-platform-v2-worktrees/copilot-integration",
+      "ports": {
+        "postgres": 4000,
+        "redis": 4001,
+        "api": 4002,
+        "pgadmin": 4003,
+        "frontend": 4004
+      },
+      "containers": {
+        "postgres": "archie-copilot-integration-postgres",
+        "redis": "archie-copilot-integration-redis",
+        "api": "archie-copilot-integration-api",
+        "pgadmin": "archie-copilot-integration-pgadmin"
+      },
+      "network": "archie-copilot-integration-network",
+      "volumes": {
+        "postgres": "archie-copilot-integration-postgres-data",
+        "redis": "archie-copilot-integration-redis-data",
+        "file_uploads": "archie-copilot-integration-file-uploads"
+      },
+      "database": {
+        "name": "archie_copilot_integration_dev",
+        "url": "postgresql://archie_user:archie_dev_password@localhost:4000/archie_copilot_integration_dev"
+      },
+      "enabled": true
+    },
+    {
+      "name": "excel-sidebar-epics",
+      "index": 5,
+      "branch": "fix/pr-1428-mesa-security-issues",
+      "path": "/mnt/data/archie-platform-v2-worktrees/excel-sidebar-epics",
+      "ports": {
+        "postgres": 5000,
+        "redis": 5001,
+        "api": 5002,
+        "pgadmin": 5003,
+        "frontend": 5004
+      },
+      "containers": {
+        "postgres": "archie-excel-sidebar-epics-postgres",
+        "redis": "archie-excel-sidebar-epics-redis",
+        "api": "archie-excel-sidebar-epics-api",
+        "pgadmin": "archie-excel-sidebar-epics-pgadmin"
+      },
+      "network": "archie-excel-sidebar-epics-network",
+      "volumes": {
+        "postgres": "archie-excel-sidebar-epics-postgres-data",
+        "redis": "archie-excel-sidebar-epics-redis-data",
+        "file_uploads": "archie-excel-sidebar-epics-file-uploads"
+      },
+      "database": {
+        "name": "archie_excel_sidebar_epics_dev",
+        "url": "postgresql://archie_user:archie_dev_password@localhost:5000/archie_excel_sidebar_epics_dev"
+      },
+      "enabled": true
+    },
+    {
+      "name": "teams-integration",
+      "index": 6,
+      "branch": "epic-1067-foundation-authentication",
+      "path": "/mnt/data/archie-platform-v2-worktrees/teams-integration",
+      "ports": {
+        "postgres": 6000,
+        "redis": 6001,
+        "api": 6002,
+        "pgadmin": 6003,
+        "frontend": 6004
+      },
+      "containers": {
+        "postgres": "archie-teams-integration-postgres",
+        "redis": "archie-teams-integration-redis",
+        "api": "archie-teams-integration-api",
+        "pgadmin": "archie-teams-integration-pgadmin"
+      },
+      "network": "archie-teams-integration-network",
+      "volumes": {
+        "postgres": "archie-teams-integration-postgres-data",
+        "redis": "archie-teams-integration-redis-data",
+        "file_uploads": "archie-teams-integration-file-uploads"
+      },
+      "database": {
+        "name": "archie_teams_integration_dev",
+        "url": "postgresql://archie_user:archie_dev_password@localhost:6000/archie_teams_integration_dev"
+      },
+      "enabled": true
+    },
+    {
+      "name": "python-310-work",
+      "index": 7,
+      "branch": "python-310-work",
+      "path": "/mnt/data/archie-platform-v2-worktrees/python-310-work",
+      "ports": {
+        "postgres": 7000,
+        "redis": 7001,
+        "api": 7002,
+        "pgadmin": 7003,
+        "frontend": 7004
+      },
+      "containers": {
+        "postgres": "archie-python-310-work-postgres",
+        "redis": "archie-python-310-work-redis",
+        "api": "archie-python-310-work-api",
+        "pgadmin": "archie-python-310-work-pgadmin"
+      },
+      "network": "archie-python-310-work-network",
+      "volumes": {
+        "postgres": "archie-python-310-work-postgres-data",
+        "redis": "archie-python-310-work-redis-data",
+        "file_uploads": "archie-python-310-work-file-uploads"
+      },
+      "database": {
+        "name": "archie_python_310_work_dev",
+        "url": "postgresql://archie_user:archie_dev_password@localhost:7000/archie_python_310_work_dev"
+      },
+      "enabled": true
+    }
+  ],
+  "config": {
+    "check_interval_seconds": 30,
+    "max_retries": 3,
+    "alert_threshold_cpu_percent": 90,
+    "alert_threshold_memory_percent": 80,
+    "log_retention_days": 7
+  }
+}

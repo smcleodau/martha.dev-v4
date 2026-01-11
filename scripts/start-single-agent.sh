@@ -15,6 +15,6 @@ cd "$WORKTREE_PATH"
 exec sg docker -c "
 export WORKTREE_NAME='$WORKTREE_NAME'
 export WORKTREE_PATH='$WORKTREE_PATH'
-export MONITOR_SERVICE_URL='ws://localhost:9000'
+export MONITOR_SERVICE_URL='ws://localhost:20000'
 exec python3 worktree_agent.py
 " >> "$LOG_FILE" 2>&1

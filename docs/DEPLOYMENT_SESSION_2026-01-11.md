@@ -356,7 +356,61 @@ Other worktrees not yet deployed:
 
 ---
 
+## Port Reorganization Update (2026-01-11 Evening)
+
+### Problem Identified
+Martha's port allocation (9000-9001) was problematic because:
+- Followed the INDEX × 1000 pattern (implied index 9)
+- Martha is the "host" system, not a worktree - should have distinctive range
+- No reserved ports for future Martha services (dashboard, gateway, web UI)
+- Could conflict with future index 9 worktree
+
+### Solution Implemented
+**Moved Martha to Index 20 (20000-20004)**
+
+**Port Mapping:**
+| Service | Old Port | New Port |
+|---------|----------|----------|
+| Monitoring Service | 9000 | 20000 |
+| Martha Redis | 9001 | 20001 |
+| Dashboard (reserved) | - | 20002 |
+| API Gateway (reserved) | - | 20003 |
+| Web UI (reserved) | - | 20004 |
+
+### Files Updated
+**Configuration Files:**
+- `~/.martha/registry.json` - Updated Martha's index from 0 to 20
+- `~/.martha/service/.env` - SERVICE_PORT=20000, REDIS_URL port to 20001
+- `~/.martha/docker-compose.yml` - Port mapping to 20001:6379
+- `~/.martha/.worktree-config.json` - All port references updated
+- All worktree `.worktree-config.json` files - Updated service_url to ws://localhost:20000
+
+**Scripts:**
+- `/mnt/data/martha.dev-v4/scripts/start-worktree-agents.sh`
+- `/mnt/data/martha.dev-v4/scripts/start-single-agent.sh`
+- `/home/archiedev/.claude/worktree-monitor/scripts/start-single-agent.sh`
+- `/home/archiedev/.claude/worktree-monitor/scripts/provision-excel-sidebar-tunnels.sh`
+
+**Documentation:**
+- `README.md` - All port references updated
+- `/home/archiedev/.claude/worktree-monitor/QUICK_REFERENCE.md` - Complete port update
+
+### Verification
+- ✅ Martha Redis running on port 20001
+- ✅ Martha service running on port 20000
+- ✅ All 5 worktree agents successfully connected
+- ✅ Cloudflare tunnels still functioning (martha.arch.ie, main-develop-web.arch.ie)
+- ✅ Old ports 9000-9001 freed up
+
+### Architecture Impact
+Martha now has a distinctive port range separate from worktrees:
+- **Worktrees:** Indices 1-19 (ports 1000-19999)
+- **Martha:** Index 20 (ports 20000-20004)
+- **Future Expansion:** Indices 21+ available for additional infrastructure
+
+---
+
 **Session Date:** 2026-01-11
-**Duration:** ~3 hours
-**Status:** ✅ Successfully Deployed
+**Duration:** ~6 hours (initial deployment + port reorganization)
+**Status:** ✅ Successfully Deployed & Reorganized
 **Next Session:** Deploy remaining worktree agents

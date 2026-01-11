@@ -26,7 +26,7 @@ MAPDS enables teams to work on multiple features, branches, and epics simultaneo
    - Centralized event aggregation
    - Cloudflare API integration
    - Redis-based event storage
-   - Runs on port 9000
+   - Runs on port 20000
 
 2. **Worktree Agents** (`agent/worktree_agent.py`)
    - One agent per worktree
@@ -60,6 +60,7 @@ Martha.dev uses a simple INDEX × 1000 port allocation:
 | excel-sidebar-epics | 5 | 5000-5004 | Worktree |
 | teams-integration | 6 | 6000-6004 | Worktree |
 | python-310-work | 7 | 7000-7004 | Worktree |
+| **martha-monitoring** | 20 | 20000-20004 | Martha Host System |
 
 **Service Offsets:**
 - +0: PostgreSQL
@@ -114,7 +115,7 @@ cd service
 python service.py
 ```
 
-The service will start on `http://localhost:9000`
+The service will start on `http://localhost:20000`
 
 ### 5. Deploy Agents to Worktrees
 
@@ -143,13 +144,13 @@ nano /path/to/your/worktree/.env.local
 
 ```bash
 # Check service health
-curl http://localhost:9000/health
+curl http://localhost:20000/health
 
 # View connected worktrees
-curl http://localhost:9000/api/v1/worktrees
+curl http://localhost:20000/api/v1/worktrees
 
 # View Cloudflare tunnels
-curl http://localhost:9000/api/v1/tunnels
+curl http://localhost:20000/api/v1/tunnels
 ```
 
 ## Configuration
@@ -186,8 +187,8 @@ The monitoring service needs:
 
 ```bash
 # Service configuration
-SERVICE_PORT=9000
-REDIS_URL=redis://:password@localhost:6379
+SERVICE_PORT=20000
+REDIS_URL=redis://:password@localhost:20001
 GITHUB_TOKEN=  # Optional, leave empty to disable
 
 # Cloudflare integration (optional)
@@ -203,7 +204,7 @@ CLOUDFLARE_DOMAIN=arch.ie
 
 ```bash
 # Via API
-curl -X POST http://localhost:9000/api/v1/worktrees/{name}/tunnels/provision
+curl -X POST http://localhost:20000/api/v1/worktrees/{name}/tunnels/provision
 
 # Via CLI
 cd service
@@ -221,7 +222,7 @@ Tunnels are automatically allocated DNS names:
 
 ```bash
 # Via API
-curl -X DELETE http://localhost:9000/api/v1/worktrees/{name}/tunnels
+curl -X DELETE http://localhost:20000/api/v1/worktrees/{name}/tunnels
 
 # Via CLI
 python cli_client.py destroy-tunnel {worktree-name}
@@ -241,7 +242,7 @@ The system emits various event types:
 ### Subscribe to Events (WebSocket)
 
 ```javascript
-const ws = new WebSocket('ws://localhost:9000/ws/worktree/excel-sidebar-epics');
+const ws = new WebSocket('ws://localhost:20000/ws/worktree/excel-sidebar-epics');
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
@@ -253,13 +254,13 @@ ws.onmessage = (event) => {
 
 ```bash
 # Get all events for a worktree
-curl http://localhost:9000/api/v1/worktrees/{name}/events
+curl http://localhost:20000/api/v1/worktrees/{name}/events
 
 # Filter by event type
-curl http://localhost:9000/api/v1/worktrees/{name}/events?event_type=health.check
+curl http://localhost:20000/api/v1/worktrees/{name}/events?event_type=health.check
 
 # Filter by severity
-curl http://localhost:9000/api/v1/worktrees/{name}/events?severity=error
+curl http://localhost:20000/api/v1/worktrees/{name}/events?severity=error
 ```
 
 ## Main Branch Protection
@@ -349,7 +350,7 @@ pytest tests/
 
 ### Agent Not Connecting
 
-1. Check service is running: `curl http://localhost:9000/health`
+1. Check service is running: `curl http://localhost:20000/health`
 2. Verify Redis connection in service logs
 3. Check agent logs: `tail -f ~/.martha/logs/worktree-agents-{name}.log`
 4. Verify WebSocket URL in agent environment

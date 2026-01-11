@@ -1,8 +1,10 @@
-# Martha.dev v4 - Worktree Monitoring System
+# Martha.dev Multi-Agent Parallel Development System (MAPDS)
 
 **Real-time monitoring and orchestration for Git worktrees with isolated Docker environments**
 
-Martha.dev v4 is a comprehensive system for managing multiple Git worktrees with completely isolated Docker environments, automated port allocation, health monitoring, and Cloudflare tunnel management.
+The Martha.dev Multi-Agent Parallel Development System (MAPDS) is a comprehensive infrastructure for parallel development across multiple Git worktrees. Each worktree operates in complete isolation with dedicated Docker environments, automated port allocation, health monitoring, and Cloudflare tunnel management.
+
+MAPDS enables teams to work on multiple features, branches, and epics simultaneously without port conflicts, container naming collisions, or infrastructure interference.
 
 ## Features
 
@@ -407,4 +409,6 @@ Built on:
 
 ---
 
-**Martha.dev v4** - Orchestrating worktrees with confidence 🚀
+**Martha.dev MAPDS (Multi-Agent Parallel Development System)** - Orchestrating worktrees with confidence 🚀
+
+*Enabling true parallel development across multiple Git worktrees*

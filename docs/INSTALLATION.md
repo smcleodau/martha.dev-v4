@@ -1,4 +1,6 @@
-# Martha.dev v4 - Installation Guide
+# Martha.dev MAPDS - Installation Guide
+
+**Multi-Agent Parallel Development System**
 
 ## Prerequisites
 

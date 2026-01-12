@@ -12,6 +12,7 @@ import { EpicTools } from './tools/epic-tools.js';
 import { WorktreeTools } from './tools/worktree-tools.js';
 import { EventTools } from './tools/event-tools.js';
 import { TunnelTools } from './tools/tunnel-tools.js';
+import { SwarmTools } from './tools/swarm-tools.js';
 
 const logger = createLogger({ module: 'mcp-server' });
 
@@ -27,6 +28,7 @@ class MarthaServer {
   private worktreeTools: WorktreeTools;
   private eventTools: EventTools;
   private tunnelTools: TunnelTools;
+  private swarmTools: SwarmTools;
 
   constructor() {
     this.server = new Server(
@@ -46,6 +48,7 @@ class MarthaServer {
     this.worktreeTools = new WorktreeTools();
     this.eventTools = new EventTools();
     this.tunnelTools = new TunnelTools();
+    this.swarmTools = new SwarmTools();
 
     this.setupHandlers();
   }
@@ -240,6 +243,66 @@ class MarthaServer {
             required: ['worktree_name'],
           },
         },
+
+        // Swarm Management Tools (4)
+        {
+          name: 'martha__swarm__spawn',
+          description: 'Spawn a new claude-flow swarm for an epic',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              epic_number: {
+                type: 'number',
+                description: 'Optional GitHub epic number for context',
+              },
+              worktree_path: {
+                type: 'string',
+                description: 'Path to worktree where swarm will run',
+              },
+            },
+            required: ['worktree_path'],
+          },
+        },
+        {
+          name: 'martha__swarm__status',
+          description: 'Get detailed status of a running swarm',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              swarm_id: {
+                type: 'string',
+                description: 'UUID of the swarm',
+              },
+            },
+            required: ['swarm_id'],
+          },
+        },
+        {
+          name: 'martha__swarm__terminate',
+          description: 'Terminate a running swarm',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              swarm_id: {
+                type: 'string',
+                description: 'UUID of the swarm',
+              },
+              reason: {
+                type: 'string',
+                description: 'Optional reason for termination',
+              },
+            },
+            required: ['swarm_id'],
+          },
+        },
+        {
+          name: 'martha__swarm__list_active',
+          description: 'List all active swarms with resource usage',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
       ];
 
       return { tools };
@@ -262,6 +325,8 @@ class MarthaServer {
           return await this.eventTools.handle(name, toolArgs);
         } else if (name.startsWith('martha__tunnel__')) {
           return await this.tunnelTools.handle(name, toolArgs);
+        } else if (name.startsWith('martha__swarm__')) {
+          return await this.swarmTools.handle(name, toolArgs);
         }
 
         throw new Error(`Unknown tool: ${name}`);
@@ -288,7 +353,7 @@ class MarthaServer {
 
     logger.info('Martha MCP Server started', {
       version: MCP_VERSION,
-      tools: 11, // Currently implemented (3 epic, 4 worktree, 2 event, 2 tunnel)
+      tools: 15, // 3 epic, 4 worktree, 2 event, 2 tunnel, 4 swarm
     });
   }
 }

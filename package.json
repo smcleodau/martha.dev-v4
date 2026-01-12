@@ -56,8 +56,10 @@
     "fastify": "^4.26.0",
     "ioredis": "^5.3.2",
     "pg": "^8.11.3",
+    "pidusage": "^4.0.1",
     "pino": "^8.19.0",
     "pino-pretty": "^10.3.1",
+    "uuid": "^13.0.0",
     "ws": "^8.16.0",
     "zod": "^3.22.4"
   },
@@ -68,6 +70,7 @@
     "@types/jest": "^29.5.11",
     "@types/node": "^20.11.16",
     "@types/pg": "^8.11.0",
+    "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^6.20.0",
     "@typescript-eslint/parser": "^6.20.0",

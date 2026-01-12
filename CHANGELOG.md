@@ -366,6 +366,329 @@ export GITHUB_REPO="owner/repository"
 
 ---
 
+## Phase 6: Cloudflare Integration (2026-01-12)
+
+### Added
+- **Cloudflare API Client** (`src/integrations/cloudflare/api-client.ts` - 389 lines)
+  - Full REST API wrapper for Cloudflare tunnel and DNS management
+  - Tunnel operations: create, get, delete, list with filtering
+  - getTunnelConnections() - Real-time tunnel health monitoring
+  - DNS operations: create, delete, list, find by name
+  - Automatic account ID resolution from zone
+  - Comprehensive error handling with typed responses
+  - Singleton pattern with environment-based configuration
+
+- **Tunnel Manager** (`src/integrations/cloudflare/tunnel-manager.ts` - 526 lines)
+  - **Complete tunnel lifecycle management**
+  - generateTunnelSecret() - 32-byte random base64 secret generation
+  - createTunnel() - API tunnel creation with credential storage
+  - generateConfigFile() - Creates cloudflared YAML configuration
+  - startTunnelDaemon() - Spawns detached cloudflared process
+    * Daemon runs in background with PID tracking
+    * Logs stored in `~/.martha/tunnels/logs/`
+    * Config stored in `~/.martha/tunnels/configs/`
+  - stopTunnelDaemon() - Graceful SIGTERM → SIGKILL shutdown
+  - isTunnelRunning() - Process health checking via kill signal 0
+  - Directory structure: `~/.martha/tunnels/{configs,credentials,pids,logs}/`
+  - Automatic cleanup and state management
+
+- **DNS Manager** (`src/integrations/cloudflare/dns-manager.ts` - 233 lines)
+  - **DNS record automation for tunnel hostnames**
+  - getTunnelCNAME() - Returns `{tunnelId}.cfargotunnel.com`
+  - createDNSRecord() - CNAME pointing to tunnel with auto-proxy
+  - deleteDNSRecord() - Cleanup when destroying tunnel
+  - verifyDNSRecord() - Validates record points to correct tunnel
+  - Proxied mode enabled by default for Cloudflare features
+  - Auto TTL configuration for optimal performance
+
+- **MCP Tunnel Tools** (`src/mcp/tools/tunnel-tools.ts` - 306 lines)
+  - **martha__tunnel__provision** - Complete tunnel setup
+    * Creates Cloudflare tunnel via API
+    * Configures DNS record with CNAME
+    * Starts cloudflared daemon
+    * Updates worktree database with tunnel info
+    * Returns public URL and daemon PID
+  - **martha__tunnel__destroy** - Complete cleanup
+    * Stops cloudflared daemon gracefully
+    * Deletes DNS record from Cloudflare
+    * Deletes tunnel from Cloudflare
+    * Updates worktree database
+  - Database integration stores tunnel metadata in worktrees table
+
+### Changed
+- **MCP Server** (`src/mcp/server.ts`)
+  - Added TunnelTools import and handler
+  - Registered 2 new MCP tools
+  - Updated tool count to 11 (was 9)
+  - Added routing for `martha__tunnel__*` tools
+  - Tool list now includes tunnel provisioning documentation
+
+### Technical Implementation
+- **Process Management:**
+  - Detached process spawning with `stdio: 'ignore'`
+  - PID tracking in filesystem (`~/.martha/tunnels/pids/`)
+  - Signal-based health checks (kill signal 0)
+  - Graceful shutdown with fallback to force kill
+
+- **Security:**
+  - Tunnel secrets stored in `~/.martha/tunnels/credentials/`
+  - 600 file permissions on credential files
+  - API tokens from environment variables
+  - No secrets in database or logs
+
+- **Cloudflare Integration:**
+  - Uses Cloudflare Tunnel API v4
+  - CNAME records point to `{tunnelId}.cfargotunnel.com`
+  - Proxied mode for DDoS protection and caching
+  - Automatic zone/account resolution
+
+### Dependencies Added
+- None - uses existing `axios` for HTTP requests
+
+### Testing
+- ✅ TypeScript compilation successful (31 files)
+- ✅ MCP server starts with 11 tools
+- ✅ Tunnel API client methods tested
+- ⏳ Live tunnel provisioning requires CLOUDFLARE_API_TOKEN
+
+### Configuration Required
+```bash
+# Required environment variables
+export CLOUDFLARE_API_TOKEN="your_api_token"
+export CLOUDFLARE_ZONE_ID="your_zone_id"
+export CLOUDFLARE_ACCOUNT_ID="your_account_id" # Optional, auto-resolved
+```
+
+### Integration Points
+- MCP tools call Cloudflare integration for tunnel management
+- Worktree creation can provision tunnels automatically
+- Tunnel info stored in PostgreSQL for state tracking
+- DNS records managed alongside tunnel lifecycle
+
+**Commit:** `c71264d` - Implement Phase 6: Cloudflare Integration
+
+---
+
+## Phase 7: Swarm Orchestration (2026-01-12)
+
+### Added
+- **SwarmOrchestrator** (`src/core/swarm-orchestrator.ts` - 556 lines)
+  - **Complete claude-flow swarm lifecycle management**
+  - spawn() - Creates and launches swarms
+    * Generates `.claude-flow/config.json` with project, topology, telemetry
+    * Sets up hook system in `.claude/settings.json`
+    * Spawns `npx claude-flow@alpha hive-mind spawn` as detached process
+    * Stores swarm in database with UUID
+    * Tracks PID for process management
+    * Starts health monitoring interval
+  - **Health monitoring** - 30-second interval polling
+    * Process running check via kill signal 0
+    * Reads `.swarm/state.json` for agents/tasks/phases
+    * Gets resource usage via pidusage (CPU, memory)
+    * Updates database with status, counts, resources
+    * Detects crashed swarms and attempts recovery
+  - **Resource enforcement** - Limits and auto-pause
+    * Max 4 CPUs (400% usage)
+    * Max 4GB memory
+    * Pauses swarm with SIGSTOP if exceeding limits
+    * Logs warnings for resource violations
+  - getStatus() - Returns swarm + state + is_running
+  - terminate() - Graceful shutdown
+    * SIGTERM with 30-second grace period
+    * SIGKILL if still running after grace
+    * Updates database status
+    * Cleans up monitoring intervals
+  - **Stale swarm cleanup** - 5-minute interval job
+    * Finds swarms without heartbeat in 5+ minutes
+    * Marks as crashed in database
+    * Optionally terminates zombie processes
+  - Singleton pattern with active swarm tracking
+
+- **Swarm Models** (`src/database/models/swarm.ts` - 88 lines)
+  - Swarm interface with UUID, epic, worktree, PID, status
+  - SwarmStatus type: spawning, running, paused, completed, crashed, terminated
+  - SwarmConfig interface with project, topology, epic_context, reasoning, telemetry
+  - ResourceUsage interface with cpu, memory, elapsed metrics
+  - SwarmState interface for parsing `.swarm/state.json`
+  - CreateSwarmDTO and UpdateSwarmDTO for database operations
+
+- **Swarm Repository** (`src/database/repositories/swarm-repository.ts` - 291 lines)
+  - **Full CRUD operations** for swarm persistence
+  - create() - Inserts swarm with auto-generated UUID
+  - findById(), findByPID() - Lookup methods
+  - findByEpicNumber() - Get all swarms for an epic
+  - findActive() - Get running/spawning/paused swarms
+  - findStaleSwarms() - Finds swarms without heartbeat in 5+ minutes
+  - update() - Dynamic updates with partial data support
+  - delete() - Remove swarm from database
+  - mapRow() - Type-safe conversion from database rows
+  - Singleton pattern for shared repository instance
+
+- **Hook Handlers** (`src/server/routes/hooks.ts` - 344 lines)
+  - **POST /api/v1/hooks/task-complete** - Task completion tracking
+    * Receives task_id, status, duration, error
+    * Forwards to swarm orchestrator
+    * Publishes to Redis `martha:hooks` channel
+    * Stores in worktree event store
+  - **POST /api/v1/hooks/session-end** - Session completion
+    * Tracks session_id, tasks_completed, duration
+    * Updates swarm statistics
+  - **POST /api/v1/hooks/agent-complete** - Agent completion
+    * Records agent_id, role, tasks_completed
+    * Updates agent activity metrics
+  - **POST /api/v1/hooks/phase-complete** - Phase tracking
+    * Marks epic phases complete
+    * Posts GitHub comment with phase summary
+    * Updates project board
+  - **POST /api/v1/hooks/error** - Error reporting
+    * Receives error details from swarm
+    * Posts to GitHub issue if issue_number provided
+    * Marks issue as blocked
+    * Stores in event log
+  - All hooks emit to Redis pub/sub for real-time monitoring
+
+- **Swarm API Routes** (`src/server/routes/swarms.ts` - 177 lines)
+  - **GET /api/v1/swarms** - List all swarms
+    * Returns summary: total, active, completed, crashed counts
+    * Includes all swarms with status, resources, uptime
+  - **GET /api/v1/swarms/:id** - Get swarm by ID
+    * Returns full swarm details
+    * Includes state from `.swarm/state.json`
+    * Shows process running status
+  - **GET /api/v1/epics/:epic_number/swarms** - Swarms for epic
+    * Filter by epic number
+    * Shows swarm history for epic
+  - **DELETE /api/v1/swarms/:id** - Terminate swarm
+    * Optional termination reason
+    * Graceful shutdown with cleanup
+    * Updates database status
+
+- **MCP Swarm Tools** (`src/mcp/tools/swarm-tools.ts` - 396 lines)
+  - **martha__swarm__spawn** - Spawn new swarm
+    * Optional epic_number for context fetching
+    * Gets epic context from GitHub if provided
+    * Passes epic metadata to swarm config
+    * Returns swarm_id, PID, monitoring info
+    * Provides next steps guidance
+  - **martha__swarm__status** - Get swarm status
+    * Returns detailed status with process health
+    * Shows agent count, task count, resource usage
+    * Includes uptime and last heartbeat
+    * Displays state from `.swarm/state.json`
+  - **martha__swarm__terminate** - Terminate swarm
+    * Optional termination reason
+    * Graceful shutdown
+    * Returns termination timestamp
+  - **martha__swarm__list_active** - List all active swarms
+    * Shows all running/spawning/paused swarms
+    * Includes resource usage per swarm
+    * Displays uptime for each
+
+### Changed
+- **Fastify Server** (`src/server/fastify.ts`)
+  - Registered hook routes with `registerHookRoutes(server)`
+  - Registered swarm routes with `registerSwarmRoutes(server)`
+  - Both routes integrated into server lifecycle
+
+- **MCP Server** (`src/mcp/server.ts`)
+  - Added SwarmTools import and instantiation
+  - Registered 4 new swarm MCP tools
+  - Updated tool count to 15 (3 epic, 4 worktree, 2 event, 2 tunnel, 4 swarm)
+  - Added routing for `martha__swarm__*` tools
+  - Enhanced tool documentation with swarm management
+
+- **Database Schema** (`src/database/schema.sql`)
+  - swarms table already present with UUID, epic_id, worktree_id, pid, status
+  - Indexes on epic_id, worktree_id, status for query performance
+  - Foreign keys with CASCADE/SET NULL for referential integrity
+  - Triggers for automatic updated_at timestamp updates
+
+### Technical Implementation
+- **Process Management:**
+  - Detached process spawning with stdio pipes for logging
+  - PID tracking in database for process health checks
+  - Signal-based process control (SIGTERM, SIGSTOP, SIGKILL)
+  - Process health checks via `kill(pid, 0)`
+  - Graceful shutdown with 30-second timeout
+
+- **State File Monitoring:**
+  - Polls `.swarm/state.json` every 30 seconds
+  - Extracts agents array, tasks array, phases object
+  - Updates database with real-time counts
+  - Detects status changes (running → crashed)
+  - Handles missing state files gracefully
+
+- **Resource Monitoring:**
+  - Uses pidusage library for CPU/memory metrics
+  - Optional dependency with graceful fallback
+  - Returns zeros if pidusage unavailable
+  - Tracks elapsed time since spawn
+  - Enforces limits: 400% CPU, 4GB memory
+
+- **Hook System:**
+  - curl-based callbacks configured in `.claude/settings.json`
+  - JSON payloads sent to Martha service
+  - Hooks fire on: task-complete, session-end, agent-complete, phase-complete, error
+  - Service forwards to orchestrator and publishes to Redis
+  - Stored in worktree event store for history
+
+- **Telemetry Integration:**
+  - Braintrust configuration in swarm config
+  - Project: martha-dev
+  - Experiment: epic-{epic_number}
+  - Tags: epic number, issue number
+  - Automatic LLM trace collection
+  - Session replay integration planned
+
+### Dependencies Added
+- `uuid` 11.0 - UUID generation for swarm IDs
+- `pidusage` 3.0 - Process resource monitoring
+- `@types/uuid` 11.0 - TypeScript definitions for uuid
+
+### Testing
+- ✅ TypeScript compilation successful (37 files, 6 new)
+- ✅ MCP server starts with 15 tools
+- ✅ Hook endpoints registered
+- ✅ Swarm API routes functional
+- ⏳ Live swarm spawning requires claude-flow@alpha installation
+
+### Configuration
+```bash
+# Optional for telemetry
+export BRAINTRUST_API_KEY="your_braintrust_key"
+
+# For epic context integration
+export GITHUB_TOKEN="ghp_xxxxxxxxxxxxx"
+export GITHUB_REPO="owner/repository"
+```
+
+### Integration Points
+- MCP tools spawn swarms and monitor status
+- Hooks provide real-time feedback to Martha service
+- Redis pub/sub broadcasts hook events to subscribers
+- Database tracks swarm lifecycle and resource usage
+- GitHub integration for epic context and progress updates
+- Event store preserves swarm activity history
+
+### Monitoring
+- Health checks every 30 seconds
+- Resource usage tracked per swarm
+- Stale swarm detection (5+ minutes without heartbeat)
+- Process health via PID checks
+- State file monitoring for agent/task counts
+- Hook event streaming via Redis
+
+### Future Enhancements
+- Swarm pause/resume functionality
+- Multi-swarm coordination
+- Resource usage alerts via Prometheus
+- Swarm log aggregation
+- Auto-recovery for crashed swarms
+- Load balancing across multiple machines
+
+**Commit:** `a45da13` - Implement Phase 7: Swarm Orchestration
+
+
 ## Phase 3: Worktree Agent System
 
 ### Added

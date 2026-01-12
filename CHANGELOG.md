@@ -97,6 +97,144 @@ Complete rewrite of Martha from Python to TypeScript/Node.js to enable MCP integ
 
 ---
 
+## Phase 5: GitHub Integration (2026-01-12)
+
+### Added
+- **GitHub Client** (`src/integrations/github/client.ts`)
+  - Octokit REST API integration with official SDK
+  - Issue management: get, create, update, list with pagination
+  - Comment operations: create, list, update
+  - Label management: add, remove, list
+  - Pull request operations: create, list, get details
+  - Commit queries with issue linking (`#number` pattern matching)
+  - Singleton pattern for shared client instance
+  - Comprehensive error handling and logging
+
+- **GitHub GraphQL Client** (`src/integrations/github/graphql.ts`)
+  - GraphQL API integration with `@octokit/graphql`
+  - **Epic fetching** with sub-issue discovery
+    * Uses timeline cross-references to find linked issues
+    * Extracts sub-issue details (number, title, state, labels, assignees)
+    * Automatic completion percentage calculation
+    * Full milestone and label metadata
+  - **Issue search** with GitHub query syntax support
+  - **Project board queries** (Projects V2)
+  - Repository owner/name configuration from environment
+
+- **Issue Tracker** (`src/integrations/github/issue-tracker.ts`)
+  - Epic tracking with PostgreSQL persistence
+    * Stores epics in `ts_martha.epics` table
+    * Stores sub-issues in `ts_martha.issues` table
+    * Links sub-issues to parent epic
+    * Tracks completion percentage
+  - **Evidence comment posting** with markdown formatting
+    * Template includes traces, sessions, tests, commits
+    * Emoji icons for visual distinction
+    * Shareable URLs for all evidence types
+    * "Definition of Done" footer
+  - Commit retrieval for issue tracking
+  - Epic status updates and queries
+  - Singleton pattern for shared tracker instance
+
+- **Project Board Automation** (`src/integrations/github/project-board.ts`)
+  - **Label-based column management** (Projects V2 proxy)
+    * `status:todo` - To Do column
+    * `status:in-progress` - In Progress column
+    * `status:in-review` - In Review column
+    * `status:done` - Done column
+  - **Automated comment posting** for work events
+    * Work started notification with worktree name
+    * Work blocked notification with reason
+    * Test failure notification with details
+  - Issue status tracking from labels
+  - Automatic label cleanup when moving columns
+  - Error handling for missing columns/labels
+
+### Changed
+- **MCP Epic Tools** (`src/mcp/tools/epic-tools.ts`)
+  - `martha__epic__start` now uses real GitHub integration
+    * Fetches epic from GitHub GraphQL API
+    * Stores epic and sub-issues in database
+    * Marks issue as in-progress on GitHub
+    * Posts "Work Started" comment automatically
+    * Returns full epic context with completion tracking
+  - `martha__epic__get_status` queries database and GitHub
+    * Shows real completion percentage from sub-issues
+    * Lists all sub-issues with state
+    * Displays worktree association
+  - Enhanced error handling for missing GITHUB_TOKEN
+    * Graceful fallback with clear error message
+    * Setup instructions in error response
+
+- **Vite Configuration** (`dashboard/vite.config.ts`)
+  - Added `allowedHosts: ['martha.arch.ie']` for tunnel access
+
+### Technical Implementation
+- **GitHub Projects V2 Strategy:**
+  - Uses labels as proxy for project board columns
+  - Avoids complex GraphQL mutations (Projects V2 requirement)
+  - Provides simple, reliable status tracking
+  - Compatible with existing GitHub workflows
+
+- **Epic Sub-Issue Discovery:**
+  - Leverages GitHub timeline cross-references
+  - Automatically discovers issues linked in epic body
+  - Filters timeline items for cross-referenced events
+  - Extracts issue metadata via GraphQL fragments
+
+- **Evidence Template Format:**
+  ```markdown
+  ## ✅ Task Complete - Evidence Attached
+
+  ### 📊 Execution Traces
+  - [Operation Name](trace URL)
+
+  ### 🎥 Session Replays
+  - [Replay](session URL) (duration)
+
+  ### ✓ Test Results
+  - Tests: X/Y passed ✅
+  - Coverage: Z%
+
+  ### 📝 Commits
+  - `abc1234` - Commit message
+
+  **Definition of Done:** ✅ Traceable, replayable, independently inspectable
+  ```
+
+### Dependencies Added
+- `@octokit/rest` 20.0 - GitHub REST API client
+- `@octokit/graphql` 7.0 - GitHub GraphQL client
+
+### Testing
+- ✅ TypeScript compilation successful (27 files)
+- ✅ MCP server starts without errors
+- ✅ GitHub integration ready for use
+- ⏳ Live API testing requires GITHUB_TOKEN configuration
+
+### Configuration Required
+```bash
+# Required environment variables
+export GITHUB_TOKEN="ghp_xxxxxxxxxxxxx"
+export GITHUB_REPO="owner/repository"
+```
+
+### Integration Points
+- MCP tools call GitHub integration for epic management
+- Issue tracker stores data in PostgreSQL for offline queries
+- Project board automation updates GitHub issue state
+- Evidence collector will format and post completion comments
+
+### Future Enhancements
+- Projects V2 native GraphQL mutations (replace label proxy)
+- Webhook support for real-time GitHub event processing
+- GitHub Actions integration for CI/CD
+- Advanced epic templates and workflows
+
+**Commit:** `3056849` - Implement Phase 5: GitHub Integration
+
+---
+
 ## Phase 3: Worktree Agent System
 
 ### Added

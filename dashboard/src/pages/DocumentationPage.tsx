@@ -1,21 +1,72 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface DocItem {
   id: string;
   title: string;
-  path: string;
+  description: string;
+  category: 'start' | 'reference' | 'technical';
+  emoji: string;
 }
 
 const documentList: DocItem[] = [
-  { id: 'plan', title: 'Migration Plan', path: '/docs/migration-plan.md' },
-  { id: 'requirements', title: 'Requirements', path: '/docs/requirements.md' },
-  { id: 'architecture', title: 'Architecture', path: '/docs/architecture.md' },
-  { id: 'phase1', title: 'Phase 1 - Foundation', path: '/docs/phase1.md' },
-  { id: 'phase2', title: 'Phase 2 - Server & WebSocket', path: '/docs/phase2.md' },
-  { id: 'phase3', title: 'Phase 3 - Worktree Agent', path: '/docs/phase3.md' },
-  { id: 'api', title: 'API Reference', path: '/docs/api.md' },
+  // START HERE - Most important
+  {
+    id: 'readme',
+    title: 'Start Here',
+    description: "What is Martha? Does it take over everything? (Spoiler: No.)",
+    category: 'start',
+    emoji: '👋'
+  },
+  {
+    id: 'capabilities',
+    title: 'What Can Martha Do?',
+    description: "Complete list of features - worktrees, monitoring, logs, etc.",
+    category: 'start',
+    emoji: '🎯'
+  },
+
+  // REFERENCE - When you need specifics
+  {
+    id: 'api',
+    title: 'API Reference',
+    description: "REST endpoints, WebSocket events, curl examples",
+    category: 'reference',
+    emoji: '📡'
+  },
+  {
+    id: 'installation',
+    title: 'Installation',
+    description: "How to set up Martha (database, Redis, env vars)",
+    category: 'reference',
+    emoji: '⚙️'
+  },
+
+  // TECHNICAL - Deep dives
+  {
+    id: 'architecture',
+    title: 'System Architecture',
+    description: "How Martha works under the hood",
+    category: 'technical',
+    emoji: '🏗️'
+  },
+  {
+    id: 'port_allocation',
+    title: 'Port Strategy',
+    description: "How ports are allocated across worktrees",
+    category: 'technical',
+    emoji: '🔌'
+  },
+  {
+    id: 'branching_strategy',
+    title: 'Git Workflow',
+    description: "Branch strategy and PR process",
+    category: 'technical',
+    emoji: '🌿'
+  },
 ];
 
 const DocumentationPage = () => {
@@ -28,79 +79,182 @@ const DocumentationPage = () => {
 
   useEffect(() => {
     if (currentDoc) {
-      fetchDocument(currentDoc.path);
+      fetchDocument(currentDoc.id);
     }
   }, [currentDoc]);
 
-  const fetchDocument = async (path: string) => {
+  const fetchDocument = async (docId: string) => {
     setLoading(true);
     setError(null);
     try {
-      // In production, this would fetch from the actual file or API
-      // For now, we'll show a placeholder
-      setContent(`# ${currentDoc?.title}\n\nDocumentation content will be loaded from:\n\`${path}\`\n\nThis is a placeholder. The actual markdown content will be loaded dynamically.`);
+      const response = await fetch(`/api/v1/docs/${docId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load document: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setContent(data.content);
     } catch (err) {
-      setError('Failed to load document');
+      setError(err instanceof Error ? err.message : 'Failed to load document');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Group docs by category
+  const docsByCategory = {
+    start: documentList.filter(d => d.category === 'start'),
+    reference: documentList.filter(d => d.category === 'reference'),
+    technical: documentList.filter(d => d.category === 'technical'),
   };
 
   if (!docId) {
     return (
       <div className="space-y-8 animate-fade-in">
         <div>
-          <h1 className="text-4xl font-bold text-neutral-900">Documentation</h1>
+          <h1 className="text-4xl font-bold text-neutral-900">Martha Documentation</h1>
           <p className="mt-2 text-neutral-600">
-            Browse Martha's documentation and guides
+            Everything you need to know about managing parallel development with Martha
           </p>
         </div>
 
-        <div className="grid gap-4">
-          {documentList.map((doc) => (
-            <Link
-              key={doc.id}
-              to={`/docs/${doc.id}`}
-              className="card hover:shadow-md transition-shadow cursor-pointer group"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-neutral-900 group-hover:text-primary-600 transition-colors">
-                    {doc.title}
-                  </h3>
-                  <p className="text-sm text-neutral-500 mt-1">{doc.path}</p>
-                </div>
-                <svg
-                  className="w-6 h-6 text-neutral-400 group-hover:text-primary-600 transition-colors"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+        {/* Quick Start Card */}
+        <div className="bg-gradient-to-r from-primary-50 to-accent-50 border-2 border-primary-200 rounded-lg p-6">
+          <div className="flex items-start gap-4">
+            <div className="text-4xl">🚀</div>
+            <div>
+              <h3 className="text-xl font-bold text-neutral-900 mb-2">
+                New to Martha?
+              </h3>
+              <p className="text-neutral-700 mb-3">
+                Martha is a background service that helps you manage multiple git worktrees.
+                It doesn't take over your terminal or commands - you're always in control.
+              </p>
+              <div className="flex gap-3">
+                <Link
+                  to="/docs/readme"
+                  className="btn btn-primary"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
+                  Read the Overview
+                </Link>
+                <a
+                  href="/"
+                  className="btn btn-secondary"
+                >
+                  View Dashboard
+                </a>
               </div>
-            </Link>
-          ))}
+            </div>
+          </div>
         </div>
 
-        {/* Current Phase Info */}
-        <div className="card bg-primary-50 border-primary-200">
-          <h2 className="text-xl font-semibold text-primary-900 mb-2">
-            🚀 Current Phase: Phase 3
-          </h2>
-          <p className="text-primary-800">
-            Worktree agent implementation complete. Agent is monitoring the typescript-rewrite
-            worktree and streaming events to the service.
-          </p>
-          <div className="mt-4 flex gap-2">
-            <span className="badge badge-success">✓ Phase 1 Complete</span>
-            <span className="badge badge-success">✓ Phase 2 Complete</span>
-            <span className="badge badge-success">✓ Phase 3 Complete</span>
+        {/* Start Here Section */}
+        <div>
+          <h2 className="text-2xl font-bold text-neutral-900 mb-4">Start Here</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            {docsByCategory.start.map((doc) => (
+              <Link
+                key={doc.id}
+                to={`/docs/${doc.id}`}
+                className="card hover:shadow-md transition-shadow cursor-pointer group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl">{doc.emoji}</div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-neutral-900 group-hover:text-primary-600 transition-colors">
+                      {doc.title}
+                    </h3>
+                    <p className="text-sm text-neutral-600 mt-1">{doc.description}</p>
+                  </div>
+                  <svg
+                    className="w-5 h-5 text-neutral-400 group-hover:text-primary-600 transition-colors flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Reference Section */}
+        <div>
+          <h2 className="text-2xl font-bold text-neutral-900 mb-4">Reference</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            {docsByCategory.reference.map((doc) => (
+              <Link
+                key={doc.id}
+                to={`/docs/${doc.id}`}
+                className="card hover:shadow-md transition-shadow cursor-pointer group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl">{doc.emoji}</div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-neutral-900 group-hover:text-primary-600 transition-colors">
+                      {doc.title}
+                    </h3>
+                    <p className="text-sm text-neutral-600 mt-1">{doc.description}</p>
+                  </div>
+                  <svg
+                    className="w-5 h-5 text-neutral-400 group-hover:text-primary-600 transition-colors flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Technical Section */}
+        <div>
+          <h2 className="text-2xl font-bold text-neutral-900 mb-4">Technical Deep Dives</h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {docsByCategory.technical.map((doc) => (
+              <Link
+                key={doc.id}
+                to={`/docs/${doc.id}`}
+                className="card hover:shadow-md transition-shadow cursor-pointer group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl">{doc.emoji}</div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-neutral-900 group-hover:text-primary-600 transition-colors">
+                      {doc.title}
+                    </h3>
+                    <p className="text-sm text-neutral-600 mt-1">{doc.description}</p>
+                  </div>
+                  <svg
+                    className="w-5 h-5 text-neutral-400 group-hover:text-primary-600 transition-colors flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
@@ -134,7 +288,35 @@ const DocumentationPage = () => {
 
         {!loading && !error && (
           <div className="prose prose-neutral max-w-none">
-            <ReactMarkdown>{content}</ReactMarkdown>
+            <ReactMarkdown
+              components={{
+                // Syntax highlighting for code blocks
+                code(props: any) {
+                  const { node, inline, className, children, ...rest } = props;
+                  const match = /language-(\w+)/.exec(className || '');
+                  return !inline && match ? (
+                    <SyntaxHighlighter
+                      style={vscDarkPlus as any}
+                      language={match[1]}
+                      PreTag="div"
+                    >
+                      {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                  ) : (
+                    <code className={className} {...rest}>
+                      {children}
+                    </code>
+                  );
+                },
+                // Make links open in new tab
+                a(props: any) {
+                  const { node, ...rest } = props;
+                  return <a {...rest} target="_blank" rel="noopener noreferrer" />;
+                },
+              }}
+            >
+              {content}
+            </ReactMarkdown>
           </div>
         )}
       </div>

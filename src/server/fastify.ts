@@ -19,6 +19,7 @@ import { logsRoutes } from './routes/logs.js';
 import { registerHookRoutes } from './routes/hooks.js';
 import { registerSwarmRoutes } from './routes/swarms.js';
 import { testRoutes } from './routes/tests.js';
+import { docsRoutes } from './routes/docs.js';
 
 const serverLogger = createLogger({ module: 'fastify' });
 
@@ -96,6 +97,7 @@ export async function createServer() {
   await registerSwarmRoutes(server);
   await server.register(testRoutes);
   await server.register(dashboardRoutes); // Changelog API
+  await server.register(docsRoutes); // Documentation API
 
   // Register static file serving for React dashboard (after all API routes)
   const dashboardDistPath = join(__dirname, '../../../dashboard/dist');

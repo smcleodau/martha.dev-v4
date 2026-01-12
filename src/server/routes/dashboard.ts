@@ -1,7 +1,42 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { config } from '../../config/index.js';
 
+const execAsync = promisify(exec);
+
 export default async function dashboardRoutes(fastify: FastifyInstance) {
+  // API endpoint for changelog
+  fastify.get('/api/v1/changelog', async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { stdout } = await execAsync(
+        'git log -20 --format="%h|%an|%ar|%s"',
+        { cwd: '/mnt/data/martha.dev-v4' }
+      );
+
+      const commits = stdout
+        .trim()
+        .split('\n')
+        .filter(line => line)
+        .map(line => {
+          const [hash, author, time, ...messageParts] = line.split('|');
+          return {
+            hash: hash.trim(),
+            author: author.trim(),
+            time: time.trim(),
+            message: messageParts.join('|').trim()
+          };
+        });
+
+      return reply.send({ commits });
+    } catch (error) {
+      return reply.status(500).send({
+        error: 'Failed to fetch changelog',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Root route - Dashboard UI
   fastify.get('/', async (_request: FastifyRequest, reply: FastifyReply) => {
     const html = `
@@ -239,6 +274,44 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
     ::-webkit-scrollbar-thumb:hover {
       background: #484f58;
     }
+
+    .commit-item {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .commit-hash {
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 0.875rem;
+      color: #58a6ff;
+      font-weight: 600;
+      min-width: 60px;
+    }
+
+    .commit-info {
+      flex: 1;
+    }
+
+    .commit-message {
+      color: #e6edf3;
+      margin-bottom: 4px;
+      line-height: 1.4;
+    }
+
+    .commit-meta {
+      color: #8b949e;
+      font-size: 0.75rem;
+    }
+
+    .commit-author {
+      color: #bc8cff;
+    }
   </style>
 </head>
 <body>
@@ -304,7 +377,14 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
         <a href="/health" class="api-link" target="_blank">Health Check</a>
         <a href="/api/v1/worktrees" class="api-link" target="_blank">Worktrees API</a>
         <a href="/api/v1/swarms" class="api-link" target="_blank">Swarms API</a>
+        <a href="/api/v1/changelog" class="api-link" target="_blank">Changelog API</a>
       </div>
+    </div>
+
+    <!-- Recent Changes -->
+    <div class="section">
+      <h2 class="section-title">Recent Changes</h2>
+      <div id="changelog-list" class="loading">Loading recent commits...</div>
     </div>
   </div>
 
@@ -391,6 +471,34 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // Fetch changelog
+    async function fetchChangelog() {
+      try {
+        const response = await fetch('/api/v1/changelog');
+        const data = await response.json();
+        const commits = data.commits || [];
+
+        const listHtml = commits.length === 0
+          ? '<div class="loading">No commits found</div>'
+          : commits.map(commit => \`
+            <div class="commit-item">
+              <div class="commit-hash">\${commit.hash}</div>
+              <div class="commit-info">
+                <div class="commit-message">\${commit.message}</div>
+                <div class="commit-meta">
+                  <span class="commit-author">\${commit.author}</span> • \${commit.time}
+                </div>
+              </div>
+            </div>
+          \`).join('');
+
+        document.getElementById('changelog-list').innerHTML = listHtml;
+      } catch (error) {
+        console.error('Failed to fetch changelog:', error);
+        document.getElementById('changelog-list').innerHTML = '<div class="loading">Error loading changelog</div>';
+      }
+    }
+
     // Connect to WebSocket for live events
     function connectWebSocket() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -466,6 +574,7 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
     fetchHealth();
     fetchWorktrees();
     fetchSwarms();
+    fetchChangelog();
     connectWebSocket();
 
     // Refresh data every 30 seconds
@@ -473,6 +582,7 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
       fetchHealth();
       fetchWorktrees();
       fetchSwarms();
+      fetchChangelog();
     }, 30000);
   </script>
 </body>

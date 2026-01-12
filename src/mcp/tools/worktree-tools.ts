@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { createLogger } from '../../utils/logger.js';
 import { appConfig } from '../../config/index.js';
+import { worktreeManager } from '../../core/worktree-manager.js';
 import type { ToolResponse, WorktreeStatus } from '../types.js';
 
 const logger = createLogger({ module: 'worktree-tools' });
@@ -34,56 +35,78 @@ export class WorktreeTools {
    * Create a new worktree
    */
   private async createWorktree(args: Record<string, unknown>): Promise<ToolResponse> {
-    const { name, branch_name, epic_number } = args;
+    const { epic_number, branch_name } = args;
 
-    if (typeof name !== 'string') {
-      throw new Error('name must be a string');
+    // Validate args
+    if (typeof epic_number !== 'number') {
+      throw new Error('epic_number must be a number');
     }
 
-    if (typeof branch_name !== 'string') {
-      throw new Error('branch_name must be a string');
+    const branchName = typeof branch_name === 'string' ? branch_name : `epic-${epic_number}`;
+
+    logger.info('Creating worktree via MCP tool', { epic_number, branch_name: branchName });
+
+    try {
+      const worktree = await worktreeManager.createWorktree({
+        epicNumber: epic_number,
+        branchName,
+        baseBranch: 'develop',
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                worktree: {
+                  name: worktree.name,
+                  path: worktree.path,
+                  branch: worktree.branch_name,
+                  index: worktree.index,
+                  ports: worktree.ports,
+                  status: worktree.status,
+                },
+                message: `Worktree created successfully at ${worktree.path}`,
+                next_steps: [
+                  'The worktree is now active and being monitored',
+                  `Access the environment at ports ${worktree.ports.service}-${worktree.ports.dashboard}`,
+                  'Check the dashboard at https://martha.arch.ie for live status',
+                ],
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Failed to create worktree', {
+        epic_number,
+        branch_name: branchName,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                epic_number,
+                branch_name: branchName,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
     }
-
-    logger.info('Creating worktree', { name, branch_name, epic_number });
-
-    // Placeholder implementation
-    // In the future, this will:
-    // 1. Create git worktree
-    // 2. Allocate port range
-    // 3. Generate .env.local
-    // 4. Initialize Docker Compose
-    // 5. Provision Cloudflare tunnels
-    // 6. Start monitoring agent
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: false,
-              message: 'Worktree creation not yet implemented',
-              info: 'This will create a full development environment with:',
-              features: [
-                'Git worktree creation',
-                'Port allocation (5 ports per worktree)',
-                'Docker Compose environment',
-                'Cloudflare tunnel provisioning',
-                'Automatic agent startup',
-              ],
-              manual_steps: [
-                `git worktree add /path/to/worktrees/${name} -b ${branch_name}`,
-                `cd /path/to/worktrees/${name}`,
-                'Setup Docker environment manually for now',
-                `npm run agent ${name} . ws://localhost:${appConfig.servicePort}`,
-              ],
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
   }
 
   /**
@@ -167,38 +190,56 @@ export class WorktreeTools {
       throw new Error('worktree_name must be a string');
     }
 
-    logger.info('Destroying worktree', { worktree_name });
+    logger.info('Destroying worktree via MCP tool', { worktree_name });
 
-    // Placeholder implementation
-    // In the future, this will:
-    // 1. Stop agent
-    // 2. Stop containers
-    // 3. Remove tunnels
-    // 4. Remove git worktree
-    // 5. Clean up database records
+    try {
+      await worktreeManager.destroyWorktree(worktree_name);
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: false,
-              message: 'Worktree destruction not yet implemented',
-              worktree_name,
-              manual_steps: [
-                'Stop the agent process',
-                'Stop Docker containers: docker compose down',
-                'Remove Cloudflare tunnels manually',
-                `Remove git worktree: git worktree remove ${worktree_name}`,
-              ],
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                message: `Worktree ${worktree_name} destroyed successfully`,
+                cleanup_completed: [
+                  'Monitoring agent stopped',
+                  'Docker containers stopped and volumes removed',
+                  'Git worktree removed',
+                  'Database records updated',
+                ],
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Failed to destroy worktree', {
+        worktree_name,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                worktree_name,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
   }
 
   /**

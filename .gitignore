@@ -53,11 +53,17 @@ service.log
 dump.rdb
 
 # Cloudflare tunnel credentials
-*.json
+**/cloudflare/*.json
 !config/*.template.json
 !config/registry.template.json
 *.pem
 *.key
+
+# But allow TypeScript config files
+!package.json
+!package-lock.json
+!tsconfig.json
+!jest.config.js
 
 # PID files
 *.pid

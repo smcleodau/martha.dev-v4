@@ -13,6 +13,90 @@ Complete rewrite of Martha from Python to TypeScript/Node.js to enable MCP integ
 
 ---
 
+## Phase 4: MCP Server (2026-01-12)
+
+### Added
+- **MCP Server** (`src/mcp/server.ts`)
+  - Model Context Protocol server using official SDK v0.5
+  - Stdio transport for Claude Code integration
+  - Request handler routing for 9 tools across 3 categories
+  - Comprehensive error handling and structured logging
+  - Version 3.0.0
+
+- **Epic Management Tools** (3 tools)
+  - `martha__epic__start` - Start tracking GitHub epic and provision worktree
+    * Fetches epic metadata and sub-issues
+    * Returns epic context with next steps
+    * Placeholder for full GitHub integration
+  - `martha__epic__get_context` - Get epic metadata for a worktree
+    * Queries service API for worktree status
+    * Returns agent version, ports, health status
+  - `martha__epic__get_status` - Get epic completion status
+    * Placeholder for completion tracking
+    * Will show progress percentage and test results
+
+- **Worktree Management Tools** (4 tools)
+  - `martha__worktree__create` - Create new git worktree
+    * Placeholder for port allocation, Docker setup, tunnel provisioning
+    * Returns manual steps for current implementation
+  - `martha__worktree__get_status` - Get real-time worktree status ✅ **Fully Working**
+    * Queries service API for live data
+    * Returns status, agent version, last seen, ports, health
+  - `martha__worktree__destroy` - Destroy worktree and cleanup
+    * Placeholder for agent stop, container cleanup, tunnel removal
+  - `martha__worktree__list_all` - List all registered worktrees ✅ **Fully Working**
+    * Returns summary (total, online, offline)
+    * Shows status for each worktree
+
+- **Event Query Tools** (2 tools)
+  - `martha__events__get_recent` - Query recent worktree events ✅ **Fully Working**
+    * Supports limit and event_type filters
+    * Groups events by type for readability
+    * Returns summary and recent events
+  - `martha__events__get_by_issue` - Get events tagged with issue number
+    * Placeholder for issue-tagged event tracking
+
+- **Tool Handler Architecture**
+  - `src/mcp/tools/epic-tools.ts` - Epic management handlers
+  - `src/mcp/tools/worktree-tools.ts` - Worktree management handlers
+  - `src/mcp/tools/event-tools.ts` - Event query handlers
+  - `src/mcp/types.ts` - Shared type definitions
+
+- **npm scripts** for MCP server
+  - `npm run mcp` - Run MCP server with tsx (development)
+  - `npm run mcp:build` - Build MCP server to dist/
+  - `npm run mcp:start` - Run production MCP server
+
+### Technical Implementation
+- All tools return JSON-formatted responses
+- Tools connect to Martha service API (http://localhost:21000)
+- Axios for HTTP requests to service endpoints
+- Type-safe interfaces using TypeScript and MCP SDK types
+- Error handling with try/catch and logging for all operations
+
+### Testing
+- ✅ Tool listing verified (all 9 tools returned with schemas)
+- ✅ Tool execution tested (martha__worktree__list_all)
+- ✅ Service API integration working
+- ✅ Live data returned from typescript-rewrite worktree
+
+### Integration
+- Ready for Claude Code: `claude mcp add martha-dev node dist/mcp/server.js`
+- Tools call Martha service for real-time data
+- Event system integration via Redis
+- Prepared for GitHub API and Cloudflare integration
+
+### Future Phases
+- Phase 5: GitHub Integration (Octokit, GraphQL, issue tracking)
+- Phase 6: Cloudflare Tunnels (actual provisioning)
+- Phase 7: Swarm Orchestration (4 tools)
+- Phase 8: Test Execution (3 tools)
+- Phase 9: Evidence Collection (4 tools)
+
+**Commit:** `2c23cf1` - Implement MCP Server with 9 core tools (Phase 4)
+
+---
+
 ## Phase 3: Worktree Agent System
 
 ### Added

@@ -1,0 +1,207 @@
+{
+  "project": "martha-typescript-phases-6-11",
+  "description": "Complete Martha TypeScript migration phases 6-11 using parallel agent execution",
+  "version": "3.0.0",
+  "topology": "hive-mind",
+  "coordination": {
+    "type": "shared-context",
+    "strategy": "phase-based",
+    "sync_interval": 300
+  },
+  "context": {
+    "project_root": "/mnt/data/martha.dev-v4-worktrees/typescript-rewrite",
+    "base_repo": "/mnt/data/martha.dev-v4",
+    "branch": "feature/typescript-rewrite",
+    "ports": {
+      "service": 21000,
+      "dashboard": 21004,
+      "postgres": 21005,
+      "redis": 20001
+    },
+    "completed_phases": [1, 2, 3, 4, 5],
+    "target_phases": [6, 7, 8, 9, 10, 11],
+    "migration_plan": "/home/archiedev/.claude/plans/delegated-herding-flute.md"
+  },
+  "agents": {
+    "cloudflare_agent": {
+      "role": "Cloudflare Integration Specialist",
+      "phase": 6,
+      "priority": "high",
+      "dependencies": [],
+      "tasks": [
+        "implement_cloudflare_api_client",
+        "implement_tunnel_manager",
+        "implement_dns_manager",
+        "implement_mcp_tunnel_tools",
+        "test_tunnel_provisioning"
+      ],
+      "files": [
+        "src/integrations/cloudflare/api-client.ts",
+        "src/integrations/cloudflare/tunnel-manager.ts",
+        "src/integrations/cloudflare/dns-manager.ts",
+        "src/mcp/tools/tunnel-tools.ts"
+      ],
+      "reference_files": [
+        "/mnt/data/martha.dev-v4/service/cloudflare_manager.py"
+      ]
+    },
+    "swarm_agent": {
+      "role": "Swarm Orchestration Specialist",
+      "phase": 7,
+      "priority": "high",
+      "dependencies": ["cloudflare_agent"],
+      "tasks": [
+        "implement_swarm_orchestrator",
+        "implement_swarm_repository",
+        "implement_hook_handlers",
+        "implement_mcp_swarm_tools",
+        "test_swarm_spawning"
+      ],
+      "files": [
+        "src/core/swarm-orchestrator.ts",
+        "src/database/models/swarm.ts",
+        "src/database/repositories/swarm-repository.ts",
+        "src/server/routes/hooks.ts",
+        "src/server/routes/swarms.ts",
+        "src/mcp/tools/swarm-tools.ts"
+      ]
+    },
+    "test_agent": {
+      "role": "Test Orchestration Specialist",
+      "phase": 8,
+      "priority": "medium",
+      "dependencies": [],
+      "tasks": [
+        "implement_test_runner",
+        "implement_test_repository",
+        "implement_result_parsers",
+        "implement_mcp_test_tools",
+        "test_execution_in_docker"
+      ],
+      "files": [
+        "src/core/test-runner.ts",
+        "src/database/models/test-execution.ts",
+        "src/database/repositories/test-repository.ts",
+        "src/mcp/tools/test-tools.ts",
+        "src/core/test-parsers.ts"
+      ]
+    },
+    "evidence_agent": {
+      "role": "Evidence Collection Specialist",
+      "phase": 9,
+      "priority": "high",
+      "dependencies": ["swarm_agent", "test_agent"],
+      "tasks": [
+        "implement_braintrust_client",
+        "implement_browserbase_client",
+        "implement_evidence_collector",
+        "implement_mcp_evidence_tools",
+        "test_evidence_validation"
+      ],
+      "files": [
+        "src/integrations/braintrust/client.ts",
+        "src/integrations/braintrust/trace-collector.ts",
+        "src/integrations/browserbase/client.ts",
+        "src/integrations/browserbase/session-recorder.ts",
+        "src/core/evidence-collector.ts",
+        "src/mcp/tools/evidence-tools.ts"
+      ]
+    },
+    "monitoring_agent": {
+      "role": "Monitoring & Metrics Specialist",
+      "phase": 10,
+      "priority": "medium",
+      "dependencies": [],
+      "tasks": [
+        "implement_prometheus_metrics",
+        "create_prometheus_config",
+        "create_alert_rules",
+        "create_grafana_dashboards",
+        "test_metrics_export"
+      ],
+      "files": [
+        "src/integrations/prometheus/metrics.ts",
+        "src/integrations/prometheus/collectors.ts",
+        "monitoring/prometheus.yml",
+        "monitoring/alerts.yml",
+        "monitoring/grafana/dashboards/martha-overview.json",
+        "monitoring/grafana/dashboards/swarm-telemetry.json",
+        "monitoring/grafana/dashboards/epic-progress.json"
+      ]
+    },
+    "testing_agent": {
+      "role": "QA & Testing Specialist",
+      "phase": 11,
+      "priority": "high",
+      "dependencies": ["cloudflare_agent", "swarm_agent", "test_agent", "evidence_agent", "monitoring_agent"],
+      "tasks": [
+        "write_unit_tests",
+        "write_integration_tests",
+        "write_e2e_tests",
+        "run_test_suite",
+        "validate_coverage"
+      ],
+      "files": [
+        "tests/unit/**/*.test.ts",
+        "tests/integration/**/*.test.ts",
+        "tests/e2e/**/*.test.ts",
+        "jest.config.js"
+      ]
+    }
+  },
+  "execution": {
+    "max_parallel_agents": 3,
+    "max_retries": 2,
+    "timeout_minutes": 120,
+    "checkpoint_interval": 600
+  },
+  "validation": {
+    "typescript_compilation": true,
+    "test_execution": true,
+    "mcp_tool_validation": true,
+    "service_health_check": true
+  },
+  "outputs": {
+    "progress_log": ".claude-flow/progress.log",
+    "metrics": ".claude-flow/metrics.json",
+    "artifacts": ".claude-flow/artifacts/",
+    "checkpoints": ".claude-flow/checkpoints/"
+  },
+  "hooks": {
+    "on_task_complete": {
+      "command": "curl",
+      "args": [
+        "-X", "POST",
+        "http://localhost:21000/api/v1/hooks/task-complete",
+        "-H", "Content-Type: application/json",
+        "-d", "@-"
+      ]
+    },
+    "on_phase_complete": {
+      "command": "curl",
+      "args": [
+        "-X", "POST",
+        "http://localhost:21000/api/v1/hooks/phase-complete",
+        "-H", "Content-Type: application/json",
+        "-d", "@-"
+      ]
+    },
+    "on_error": {
+      "command": "curl",
+      "args": [
+        "-X", "POST",
+        "http://localhost:21000/api/v1/hooks/error",
+        "-H", "Content-Type: application/json",
+        "-d", "@-"
+      ]
+    }
+  },
+  "telemetry": {
+    "enabled": true,
+    "braintrust": {
+      "project": "martha-typescript-migration",
+      "experiment": "phases-6-11",
+      "tags": ["migration", "typescript", "parallel-execution"]
+    }
+  }
+}

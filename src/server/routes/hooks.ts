@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { createLogger } from '../../utils/logger.js';
 import { getSwarmOrchestrator } from '../../core/swarm-orchestrator.js';
-import { redisClient } from '../../redis/client.js';
+import { redis } from '../../redis/client.js';
 import { getIssueTracker } from '../../integrations/github/issue-tracker.js';
 import { getProjectBoard } from '../../integrations/github/project-board.js';
 
@@ -74,7 +74,7 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
       await swarmOrchestrator.handleHook('task-complete', payload);
 
       // Emit event to Redis
-      await redisClient.publish('martha:hooks', JSON.stringify({
+      await redis.publish('martha:hooks', JSON.stringify({
         type: 'hook.task-complete',
         payload,
         timestamp: new Date().toISOString()
@@ -82,7 +82,7 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
 
       // Store in Redis event store if worktree provided
       if (payload.worktree) {
-        await redisClient.lpush(
+        await redis.lpush(
           `ts:events:${payload.worktree}`,
           JSON.stringify({
             type: 'swarm.task-complete',
@@ -125,14 +125,14 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
       await swarmOrchestrator.handleHook('session-end', payload);
 
       // Emit event
-      await redisClient.publish('martha:hooks', JSON.stringify({
+      await redis.publish('martha:hooks', JSON.stringify({
         type: 'hook.session-end',
         payload,
         timestamp: new Date().toISOString()
       }));
 
       // Store in event store
-      await redisClient.lpush(
+      await redis.lpush(
         `ts:events:${payload.worktree}`,
         JSON.stringify({
           type: 'swarm.session-end',
@@ -172,14 +172,14 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
       await swarmOrchestrator.handleHook('agent-complete', payload);
 
       // Emit event
-      await redisClient.publish('martha:hooks', JSON.stringify({
+      await redis.publish('martha:hooks', JSON.stringify({
         type: 'hook.agent-complete',
         payload,
         timestamp: new Date().toISOString()
       }));
 
       // Store in event store
-      await redisClient.lpush(
+      await redis.lpush(
         `ts:events:${payload.worktree}`,
         JSON.stringify({
           type: 'swarm.agent-complete',
@@ -238,14 +238,14 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
       }
 
       // Emit event
-      await redisClient.publish('martha:hooks', JSON.stringify({
+      await redis.publish('martha:hooks', JSON.stringify({
         type: 'hook.phase-complete',
         payload,
         timestamp: new Date().toISOString()
       }));
 
       // Store in event store
-      await redisClient.lpush(
+      await redis.lpush(
         `ts:events:${payload.worktree}`,
         JSON.stringify({
           type: 'swarm.phase-complete',
@@ -300,14 +300,14 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
       }
 
       // Emit event
-      await redisClient.publish('martha:hooks', JSON.stringify({
+      await redis.publish('martha:hooks', JSON.stringify({
         type: 'hook.error',
         payload,
         timestamp: new Date().toISOString()
       }));
 
       // Store in event store
-      await redisClient.lpush(
+      await redis.lpush(
         `ts:events:${payload.worktree}`,
         JSON.stringify({
           type: 'swarm.error',

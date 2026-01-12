@@ -11,6 +11,7 @@ import { createLogger } from '../utils/logger.js';
 import { EpicTools } from './tools/epic-tools.js';
 import { WorktreeTools } from './tools/worktree-tools.js';
 import { EventTools } from './tools/event-tools.js';
+import { TunnelTools } from './tools/tunnel-tools.js';
 
 const logger = createLogger({ module: 'mcp-server' });
 
@@ -25,6 +26,7 @@ class MarthaServer {
   private epicTools: EpicTools;
   private worktreeTools: WorktreeTools;
   private eventTools: EventTools;
+  private tunnelTools: TunnelTools;
 
   constructor() {
     this.server = new Server(
@@ -43,6 +45,7 @@ class MarthaServer {
     this.epicTools = new EpicTools();
     this.worktreeTools = new WorktreeTools();
     this.eventTools = new EventTools();
+    this.tunnelTools = new TunnelTools();
 
     this.setupHandlers();
   }
@@ -199,6 +202,44 @@ class MarthaServer {
             required: ['issue_number'],
           },
         },
+
+        // Tunnel Management Tools (2)
+        {
+          name: 'martha__tunnel__provision',
+          description: 'Provision a Cloudflare tunnel for a worktree',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              worktree_name: {
+                type: 'string',
+                description: 'Name of the worktree',
+              },
+              port: {
+                type: 'number',
+                description: 'Local port to expose via tunnel',
+              },
+              subdomain: {
+                type: 'string',
+                description: 'Optional custom subdomain (default: worktree_name.martha.arch.ie)',
+              },
+            },
+            required: ['worktree_name', 'port'],
+          },
+        },
+        {
+          name: 'martha__tunnel__destroy',
+          description: 'Destroy Cloudflare tunnel for a worktree',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              worktree_name: {
+                type: 'string',
+                description: 'Name of the worktree',
+              },
+            },
+            required: ['worktree_name'],
+          },
+        },
       ];
 
       return { tools };
@@ -219,6 +260,8 @@ class MarthaServer {
           return await this.worktreeTools.handle(name, toolArgs);
         } else if (name.startsWith('martha__events__')) {
           return await this.eventTools.handle(name, toolArgs);
+        } else if (name.startsWith('martha__tunnel__')) {
+          return await this.tunnelTools.handle(name, toolArgs);
         }
 
         throw new Error(`Unknown tool: ${name}`);
@@ -245,7 +288,7 @@ class MarthaServer {
 
     logger.info('Martha MCP Server started', {
       version: MCP_VERSION,
-      tools: 9, // Currently implemented
+      tools: 11, // Currently implemented (3 epic, 4 worktree, 2 event, 2 tunnel)
     });
   }
 }

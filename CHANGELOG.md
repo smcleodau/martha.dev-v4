@@ -13,6 +13,137 @@ Complete rewrite of Martha from Python to TypeScript/Node.js to enable MCP integ
 
 ---
 
+## Current Deployment Status (2026-01-12)
+
+### ✅ Operational Services
+
+**Core Services Running:**
+- ✅ Martha TypeScript Service - Port 21000 (v3.0.0)
+- ✅ Martha Dashboard - Port 21004 (React + Vite)
+- ✅ PostgreSQL Database - Port 21005 (schema: ts_martha)
+- ✅ Redis - Port 20001 (shared, prefix: ts:)
+- ✅ Worktree Agent - 1 active (typescript-rewrite)
+
+**System Health:**
+- Service Status: Healthy
+- Database: Connected
+- Redis: Connected
+- Active Worktrees: 1 online, 0 offline
+
+### 🌐 Public Access Configuration
+
+**Cloudflare Tunnel Mapping:**
+```
+martha.arch.ie → localhost:21004 (Dashboard/Frontend) ✅ CONFIGURED
+martha-api.arch.ie → localhost:21000 (API Service) 🔄 NEEDED
+```
+
+**Dashboard URLs:**
+- Public: https://martha.arch.ie
+- Local: http://localhost:21004
+
+**API Endpoints:**
+- Public: https://martha-api.arch.ie (pending tunnel)
+- Local: http://localhost:21000
+
+**Dashboard Pages:**
+- `/` - Overview (service health, worktree status, real-time monitoring)
+- `/docs` - Documentation browser (phase progress, technical specs)
+- `/settings` - Configuration viewer (ports, database, Redis)
+
+### 📋 Completed Implementation (Phases 1-5)
+
+**Phase Status:**
+- ✅ Phase 1: Foundation (Config, DB, Redis, Logging)
+- ✅ Phase 2: Server & WebSocket (Fastify, ConnectionManager, Event Store)
+- ✅ Phase 3: Worktree Agent System (Git, Docker, Health monitoring)
+- ✅ Phase 4: MCP Server (9 tools for Claude Code integration)
+- ✅ Phase 5: GitHub Integration (Octokit, GraphQL, Epic tracking)
+
+**Statistics:**
+- TypeScript Files: 27 compiled
+- Lines of Code: ~4,500+
+- MCP Tools: 9 working (3 epic, 4 worktree, 2 event)
+- GitHub Integration: 4 modules (1,176 lines)
+- Git Commits: 7 on feature/typescript-rewrite branch
+
+### 🚀 MCP Integration
+
+**Claude Code Setup:**
+```bash
+claude mcp add martha-dev node /mnt/data/martha.dev-v4-worktrees/typescript-rewrite/dist/mcp/server.js
+```
+
+**Available MCP Tools:**
+- `martha__epic__start` - Start epic tracking with GitHub integration ✅
+- `martha__epic__get_context` - Get worktree context ✅
+- `martha__epic__get_status` - Get epic completion status ✅
+- `martha__worktree__create` - Create new worktree (placeholder)
+- `martha__worktree__get_status` - Get worktree status ✅
+- `martha__worktree__destroy` - Destroy worktree (placeholder)
+- `martha__worktree__list_all` - List all worktrees ✅
+- `martha__events__get_recent` - Query recent events ✅
+- `martha__events__get_by_issue` - Get issue-tagged events (placeholder)
+
+### 🎨 Dashboard Features
+
+**Implemented:**
+- Real-time service health monitoring (auto-refresh every 5s)
+- Active worktree list with status badges
+- Event stream visualization
+- Documentation browser with phase tracking
+- Configuration display (masked sensitive values)
+- Martha's brand color palette (coral, turquoise, peach, cream)
+- Responsive design with TailwindCSS
+
+### 🔧 Configuration
+
+**Environment Variables Required:**
+```bash
+# Service
+PORT=21000
+NODE_ENV=development
+
+# Database
+DATABASE_URL=postgresql://postgres:martha_ts_pwd@localhost:21005/martha
+DATABASE_SCHEMA=ts_martha
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=20001
+REDIS_KEY_PREFIX=ts:
+
+# GitHub Integration (optional - required for epic tracking)
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
+GITHUB_REPO=owner/repository
+
+# Cloudflare (for tunnel provisioning)
+CLOUDFLARE_API_TOKEN=xxxxx
+CLOUDFLARE_ZONE_ID=xxxxx
+CLOUDFLARE_ACCOUNT_ID=xxxxx
+```
+
+### 📂 Git Worktree
+
+**Location:** `/mnt/data/martha.dev-v4-worktrees/typescript-rewrite`
+**Branch:** `feature/typescript-rewrite`
+**Base Repository:** `/mnt/data/martha.dev-v4`
+
+### 🔄 Migration Strategy
+
+**Current State:**
+- TypeScript version operational on ports 21000-21004
+- Python version still available on ports 20000-20004
+- Separate PostgreSQL instances (no shared state)
+- Shared Redis with key prefix isolation (ts: vs py:)
+
+**Next Steps:**
+- Phase 6: Cloudflare tunnel management implementation
+- Phase 7: Claude-flow swarm orchestration
+- Phase 8-12: Test execution, evidence collection, monitoring, cutover
+
+---
+
 ## Phase 4: MCP Server (2026-01-12)
 
 ### Added

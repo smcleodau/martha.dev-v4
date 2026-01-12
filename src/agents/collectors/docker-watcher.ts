@@ -12,6 +12,8 @@ export class DockerWatcher {
   private docker: Docker;
   private worktreeName: string;
   private lastStatus: Map<string, ContainerStatus> = new Map();
+  private dockerAvailable: boolean = true;
+  private dockerCheckAttempted: boolean = false;
 
   constructor(worktreeName: string) {
     this.worktreeName = worktreeName;
@@ -19,10 +21,40 @@ export class DockerWatcher {
   }
 
   /**
+   * Check if Docker is available and accessible
+   */
+  private async checkDockerAvailable(): Promise<boolean> {
+    if (this.dockerCheckAttempted) {
+      return this.dockerAvailable;
+    }
+
+    this.dockerCheckAttempted = true;
+
+    try {
+      await this.docker.ping();
+      this.dockerAvailable = true;
+      logger.info('Docker is available');
+      return true;
+    } catch (error) {
+      this.dockerAvailable = false;
+      logger.warn('Docker is not available or not accessible - skipping Docker monitoring', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        hint: 'Add user to docker group or ensure Docker daemon is running',
+      });
+      return false;
+    }
+  }
+
+  /**
    * Check Docker container status and return events
    */
   async checkStatus(): Promise<AgentEvent[]> {
     const events: AgentEvent[] = [];
+
+    // Check if Docker is available (only done once)
+    if (!(await this.checkDockerAvailable())) {
+      return events; // Skip Docker checks silently
+    }
 
     try {
       // List containers matching this worktree
@@ -84,9 +116,14 @@ export class DockerWatcher {
 
       this.lastStatus = currentStatus;
     } catch (error) {
-      logger.error('Docker check failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      // If Docker becomes unavailable after initial check, disable it
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('permission denied') || errorMessage.includes('EACCES') || errorMessage.includes('ENOENT')) {
+        logger.warn('Docker access lost - disabling Docker monitoring', { error: errorMessage });
+        this.dockerAvailable = false;
+      } else {
+        logger.error('Docker check failed', { error: errorMessage });
+      }
     }
 
     return events;

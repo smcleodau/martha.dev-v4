@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 21004,
+    allowedHosts: ['martha.arch.ie'],
     proxy: {
       '/api': {
         target: 'http://localhost:21000',

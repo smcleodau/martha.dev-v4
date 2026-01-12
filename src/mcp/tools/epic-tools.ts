@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { createLogger } from '../../utils/logger.js';
 import { appConfig } from '../../config/index.js';
-import type { ToolResponse, EpicContext } from '../types.js';
+import { getIssueTracker } from '../../integrations/github/issue-tracker.js';
+import { getProjectBoard } from '../../integrations/github/project-board.js';
+import type { ToolResponse } from '../types.js';
 
 const logger = createLogger({ module: 'epic-tools' });
 
@@ -44,22 +46,37 @@ export class EpicTools {
     logger.info('Starting epic', { epic_number, branch_name: branchName });
 
     try {
-      // For now, return a placeholder response
-      // In the future, this will:
-      // 1. Fetch epic from GitHub GraphQL
-      // 2. Store in PostgreSQL
-      // 3. Create worktree
-      // 4. Provision tunnels
-      // 5. Start monitoring
+      // Check if GitHub token is configured
+      if (!process.env.GITHUB_TOKEN) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  error: 'GitHub token not configured',
+                  message: 'Set GITHUB_TOKEN environment variable to use GitHub integration',
+                  fallback_mode: true,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
 
-      const response: EpicContext = {
-        epic_number,
-        title: `Epic #${epic_number}`,
-        description: 'Epic tracking started',
-        state: 'in_progress',
-        sub_issues: [],
-        worktree_name: branchName,
-      };
+      // Fetch epic from GitHub and store in database
+      const tracker = getIssueTracker();
+      const board = getProjectBoard();
+
+      const epic = await tracker.trackEpic(epic_number, branchName);
+
+      // Mark epic as in progress
+      await board.markIssueAsInProgress(epic_number);
+
+      // Comment on epic that work has started
+      await board.commentWorkStarted(epic_number, branchName);
 
       return {
         content: [
@@ -68,13 +85,26 @@ export class EpicTools {
             text: JSON.stringify(
               {
                 success: true,
-                epic: response,
+                epic: {
+                  epic_number: epic.epic_number,
+                  title: epic.title,
+                  description: epic.description,
+                  state: epic.state,
+                  sub_issues: epic.sub_issues,
+                  completion_percentage: epic.completion_percentage,
+                  worktree_name: branchName,
+                },
                 message: `Epic #${epic_number} tracking started. Worktree: ${branchName}`,
                 next_steps: [
                   `Create worktree: martha__worktree__create name="${branchName}" branch_name="${branchName}"`,
                   'Start development in the new worktree',
                   'Monitor progress with martha__epic__get_status',
                 ],
+                github_integration: {
+                  status_label_added: 'status:in-progress',
+                  comment_posted: true,
+                  sub_issues_tracked: epic.sub_issues.length,
+                },
               },
               null,
               2
@@ -172,29 +202,84 @@ export class EpicTools {
 
     logger.info('Getting epic status', { epic_number });
 
-    // Placeholder response
-    // In the future, this will query:
-    // - Database for epic record
-    // - Associated worktree status
-    // - Test execution results
-    // - Evidence collection status
+    try {
+      const tracker = getIssueTracker();
+      const epic = await tracker.getEpic(epic_number);
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
+      if (!epic) {
+        return {
+          content: [
             {
-              epic_number,
-              status: 'in_progress',
-              message: 'Epic status tracking not yet implemented',
-              info: 'This will show completion percentage, sub-issue status, test results, etc.',
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  error: 'Epic not found',
+                  epic_number,
+                  suggestion: 'Start tracking the epic first with martha__epic__start',
+                },
+                null,
+                2
+              ),
             },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+          ],
+        };
+      }
+
+      // Get worktree status if associated
+      let worktreeStatus = null;
+      if (epic.worktree_name) {
+        try {
+          const response = await axios.get(
+            `${this.serviceUrl}/api/v1/worktrees/${epic.worktree_name}`
+          );
+          worktreeStatus = response.data;
+        } catch {
+          // Worktree not found or offline
+          worktreeStatus = { status: 'offline' };
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                epic_number,
+                title: epic.title,
+                state: epic.state,
+                completion_percentage: epic.completion_percentage,
+                sub_issues: {
+                  total: epic.sub_issues.length,
+                  closed: epic.sub_issues.filter((s) => s.state === 'closed').length,
+                  open: epic.sub_issues.filter((s) => s.state === 'open').length,
+                  list: epic.sub_issues.map((s) => ({
+                    number: s.number,
+                    title: s.title,
+                    state: s.state,
+                  })),
+                },
+                worktree: epic.worktree_name
+                  ? {
+                      name: epic.worktree_name,
+                      status: worktreeStatus?.status || 'unknown',
+                      agent_version: worktreeStatus?.agentVersion,
+                    }
+                  : null,
+                updated_at: epic.updated_at,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Failed to get epic status', {
+        epic_number,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
   }
 }

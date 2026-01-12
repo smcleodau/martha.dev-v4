@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import { appConfig } from '../config/index.js';
 import { createLogger } from '../utils/logger.js';
 
+import dashboardRoutes from './routes/dashboard.js';
 import { healthRoutes } from './routes/health.js';
 import { websocketRoutes } from './routes/websocket.js';
 import { worktreeRoutes } from './routes/worktrees.js';
@@ -80,6 +81,7 @@ export async function createServer() {
   });
 
   // Register routes
+  await server.register(dashboardRoutes); // Dashboard must be first for root route
   await server.register(healthRoutes);
   await server.register(websocketRoutes);
   await server.register(worktreeRoutes);

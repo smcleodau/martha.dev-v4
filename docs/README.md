@@ -5,55 +5,72 @@
 
 ## What is Martha?
 
-Martha is a **development orchestration service** that runs in the background on your machine. It provides:
+Martha orchestrates parallel development workflows. It manages worktrees, monitors agents, and coordinates autonomous swarms for epic-level task execution.
 
+**Core Capabilities:**
+- **Swarm Orchestration** - Launch autonomous multi-agent swarms to work through GitHub epics
 - **Worktree Management** - Create and track multiple git worktrees (isolated development environments)
 - **Real-Time Monitoring** - WebSocket agents that monitor each worktree's status
 - **Dashboard** - Web UI at https://martha.arch.ie for viewing status and logs
 - **MCP Integration** - Model Context Protocol tools for Claude Code
 
-## Does Martha Take Over Everything?
+**Note:** Martha is a background service - it doesn't intercept commands or modify your shell.
 
-**No.** Martha is a **service** (like a database or Redis) - it runs in the background and provides tools when you need them.
+## Swarms: Autonomous Epic Management
 
-### What Martha Does:
-- ✅ Monitors worktrees you create through it
-- ✅ Tracks git status, Docker containers, and service health
-- ✅ Provides a dashboard to view everything
-- ✅ Offers MCP tools in Claude Code for worktree operations
+Martha's most powerful feature is **swarm orchestration**. Launch a swarm for any GitHub epic and watch multiple Claude agents work through all sub-issues autonomously.
 
-### What Martha Does NOT Do:
-- ❌ Does not intercept or modify your regular commands
-- ❌ Does not automatically run commands without your request
-- ❌ Does not modify your shell or terminal
-- ❌ Does not track worktrees you create manually (unless you register them)
+```bash
+# Via MCP in Claude Code
+martha__swarm__spawn(epic_number=123, worktree_path="/path/to/worktree")
+```
+
+The swarm:
+- Fetches the epic and all sub-issues from GitHub
+- Spawns multiple specialized agents (planner, implementer, tester, reviewer)
+- Agents coordinate via hive-mind topology (shared reasoning)
+- Work progresses autonomously through tasks
+- Posts progress updates to GitHub as phases complete
+- Monitors resource usage and health (CPU, memory, uptime)
+
+Monitor in real-time via dashboard or MCP:
+```bash
+martha__swarm__status(swarm_id="abc-123")
+martha__swarm__list_active()
+martha__swarm__terminate(swarm_id="abc-123", reason="Epic scope changed")
+```
+
+**Example:** Spawn a swarm for epic #123 with 5 sub-issues. The swarm spawns 4 agents that collaborate to implement features, write tests, and create PRs. Watch progress in the dashboard or GitHub comments. Swarm completes autonomously and posts completion status.
 
 ## How Martha Works
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  Your Terminal / Claude Code                        │
-│  - You run commands normally                        │
-│  - Optionally use Martha MCP tools                  │
+│  Claude Code / Terminal                             │
+│  - Use Martha MCP tools                             │
+│  - Spawn swarms for epics                           │
+│  - Create/manage worktrees                          │
 └──────────────┬──────────────────────────────────────┘
-               │
-               │ (optional MCP calls)
-               │
+               │ (MCP calls)
 ┌──────────────▼──────────────────────────────────────┐
 │  Martha Service (http://localhost:20000)            │
-│  - Runs in background                               │
-│  - Provides API and WebSocket                       │
-│  - Manages worktree registry                        │
-└──────────────┬──────────────────────────────────────┘
-               │
-               │ (WebSocket connections)
-               │
-┌──────────────▼──────────────────────────────────────┐
-│  Worktree Agents (one per worktree)                 │
-│  - Monitor git status                               │
-│  - Check Docker containers (if available)           │
-│  - Send events to Martha service                    │
-└─────────────────────────────────────────────────────┘
+│  - Worktree registry & lifecycle                    │
+│  - Swarm orchestration                              │
+│  - API and WebSocket                                │
+│  - GitHub integration                               │
+└──────────┬────────────────────┬─────────────────────┘
+           │                    │
+           │ (WebSocket)        │ (Process spawn)
+           │                    │
+┌──────────▼───────┐   ┌───────▼──────────────────────┐
+│  Worktree Agents │   │  Swarms (claude-flow)        │
+│  - Monitor git   │   │  ├─ Agent 1 (planner)        │
+│  - Track Docker  │   │  ├─ Agent 2 (implementer)    │
+│  - Send events   │   │  ├─ Agent 3 (tester)         │
+└──────────────────┘   │  └─ Agent 4 (reviewer)       │
+                       │  Hive-mind coordination       │
+                       │  Post callbacks to Martha     │
+                       └──────────────────────────────┘
 ```
 
 ## When You Use Martha
@@ -102,16 +119,35 @@ If Claude Code won't start, it's a separate issue (likely Python environment iss
 curl http://localhost:20000/health
 ```
 
-### 2. View Dashboard
-Open https://martha.arch.ie in your browser
-
-### 3. List Worktrees
+### 2. Launch a Swarm (Most Powerful Feature)
+In Claude Code, spawn a swarm for a GitHub epic:
 ```bash
-curl http://localhost:20000/api/v1/worktrees | jq
+# Martha fetches epic #123 and spawns autonomous agents
+martha__swarm__spawn(epic_number=123, worktree_path="/path/to/worktree")
+
+# Monitor progress
+martha__swarm__list_active()
+martha__swarm__status(swarm_id="...")
 ```
 
-### 4. Use in Claude Code
-Just use Claude Code normally. When you need worktree operations, Claude will call Martha's MCP tools (you'll see it in the conversation).
+Watch in the dashboard as agents collaborate to complete all sub-issues.
+
+### 3. View Dashboard
+Open https://martha.arch.ie to monitor:
+- Active swarms and their progress
+- Worktree statuses
+- Real-time logs
+- Resource usage
+
+### 4. Create Worktrees (Manual Development)
+```bash
+# Via MCP in Claude Code
+martha__worktree__create_daily()  # Create daily work branch
+martha__worktree__list()           # List all worktrees
+```
+
+### 5. Use in Claude Code
+Martha's MCP tools are available in Claude Code. When you need worktree operations or want to spawn swarms, Claude will call the appropriate tools.
 
 ## Documentation Index
 
@@ -153,30 +189,33 @@ Service log:
 /tmp/martha-20000.log
 ```
 
-## Common Questions
+## Common Operations
 
-### Q: Does Martha slow down my terminal?
-**A:** No. Martha is a background service. It doesn't hook into your terminal or shell.
-
-### Q: Can I use git normally?
-**A:** Yes! Martha just provides additional tooling for managing worktrees. Your normal git commands work exactly as before.
-
-### Q: What if I don't want to use Martha?
-**A:** Just don't call its MCP tools in Claude Code. The service runs in the background but doesn't interfere with anything else.
-
-### Q: How do I stop Martha?
+### Stop Martha
 ```bash
 # Stop the service
 pkill -f "node dist/src/index.js"
 
 # Stop all agents
 pkill -f "agent-cli"
+
+# Stop a specific swarm
+martha__swarm__terminate(swarm_id="...", reason="Manual stop")
 ```
 
-### Q: How do I restart Martha?
+### Restart Martha
 ```bash
 cd /mnt/data/martha.dev-v4
 npm start > /tmp/martha-20000.log 2>&1 &
+```
+
+### Check Swarm Status
+```bash
+# List all active swarms
+curl http://localhost:20000/api/v1/swarms | jq
+
+# Get specific swarm details
+martha__swarm__status(swarm_id="...")
 ```
 
 ## Troubleshooting
@@ -213,11 +252,13 @@ bash scripts/start-ts-agent.sh {name} {path} ws://localhost:20000
 
 ## Summary
 
-Martha is a **helpful service** that provides worktree management and monitoring. It:
-- ✅ Runs quietly in the background
-- ✅ Provides tools when you need them (via MCP in Claude Code)
-- ✅ Shows you what's happening via dashboard and logs
-- ❌ Does NOT take over your terminal or commands
-- ❌ Does NOT run automatically without your request
+Martha orchestrates parallel development with three key capabilities:
 
-**You are always in control.**
+1. **Swarms** - Autonomous multi-agent sessions that work through entire GitHub epics
+2. **Worktrees** - Isolated development environments with automatic port allocation
+3. **Monitoring** - Real-time status tracking, logs, and resource usage
+
+Access via:
+- **MCP tools** in Claude Code
+- **Dashboard** at https://martha.arch.ie
+- **REST API** at http://localhost:20000

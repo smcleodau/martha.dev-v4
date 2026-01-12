@@ -16,15 +16,15 @@ const documentList: DocItem[] = [
   // START HERE - Most important
   {
     id: 'readme',
-    title: 'Start Here',
-    description: "What is Martha? Does it take over everything? (Spoiler: No.)",
+    title: 'Overview',
+    description: "Quick start - swarms, worktrees, monitoring",
     category: 'start',
     emoji: '👋'
   },
   {
     id: 'capabilities',
     title: 'What Can Martha Do?',
-    description: "Complete list of features - worktrees, monitoring, logs, etc.",
+    description: "Swarm orchestration, epic management, autonomous agents",
     category: 'start',
     emoji: '🎯'
   },
@@ -126,8 +126,8 @@ const DocumentationPage = () => {
                 New to Martha?
               </h3>
               <p className="text-neutral-700 mb-3">
-                Martha is a background service that helps you manage multiple git worktrees.
-                It doesn't take over your terminal or commands - you're always in control.
+                Martha orchestrates parallel development workflows. Spawn autonomous swarms
+                to manage entire GitHub epics, or create isolated worktrees for manual work.
               </p>
               <div className="flex gap-3">
                 <Link

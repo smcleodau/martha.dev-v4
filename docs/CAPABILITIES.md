@@ -9,7 +9,168 @@ Martha is a Multi-Agent Parallel Development System (MAPDS) that provides intell
 
 ## Core Capabilities
 
-### 1. Worktree Management
+### 1. Swarm Orchestration
+
+Martha's flagship feature: autonomous multi-agent development sessions powered by claude-flow.
+
+#### What Are Swarms?
+
+Swarms are **multi-agent autonomous development sessions** that work through entire GitHub epics. When you spawn a swarm:
+
+1. Martha fetches the epic and all sub-issues from GitHub
+2. Creates a claude-flow configuration with epic context
+3. Spawns multiple Claude agents in a hive-mind topology
+4. Agents coordinate work across sub-issues autonomously
+5. Progress is tracked in real-time
+6. Callbacks posted to Martha for observability
+7. GitHub updates posted as phases complete
+
+#### Architecture
+
+```
+GitHub Epic #123
+├─ Sub-issue #456: Feature X
+├─ Sub-issue #457: Feature Y
+└─ Sub-issue #458: Testing
+       │
+       ▼
+Martha spawns swarm → claude-flow process
+       │
+       ├─ Agent 1 (planner)    → Task #1
+       ├─ Agent 2 (implementer) → Task #2
+       ├─ Agent 3 (tester)      → Task #3
+       └─ Agent 4 (reviewer)    → Coordination
+             │
+             ▼
+       Hive-mind coordination
+       (shared context/reasoning)
+             │
+             ▼
+       Hook callbacks to Martha
+       (task-complete, phase-complete, session-end)
+             │
+             ▼
+       GitHub progress comments
+```
+
+#### MCP Tools
+
+Four tools available in Claude Code:
+
+```typescript
+// Spawn a new swarm for an epic
+martha__swarm__spawn({
+  epic_number: 123,
+  worktree_path: "/path/to/worktree"
+})
+
+// Get detailed status
+martha__swarm__status({
+  swarm_id: "abc-123-def-456"
+})
+
+// List all active swarms
+martha__swarm__list_active()
+
+// Terminate a swarm
+martha__swarm__terminate({
+  swarm_id: "abc-123-def-456",
+  reason: "Epic requirements changed"
+})
+```
+
+#### Monitoring & Health
+
+- **Heartbeat**: Every 30 seconds, Martha reads `.swarm/state.json`
+- **Resource Tracking**: CPU percentage, memory usage, uptime
+- **Resource Limits**: Max 4 CPUs, 4GB RAM (pauses swarm if exceeded)
+- **Crash Detection**: Marks as crashed if no heartbeat for 5+ minutes
+- **Database Persistence**: Full lifecycle stored in PostgreSQL
+
+#### Hook System
+
+Swarms post callbacks to Martha via HTTP:
+
+- **post-task**: Task completion (individual sub-issue done)
+- **agent-complete**: Agent finished its role
+- **phase-complete**: Epic phase done (GitHub comment posted)
+- **session-end**: Full session complete
+- **error**: Blocker encountered (GitHub notification)
+
+All events published to Redis pub/sub and forwarded to dashboard clients.
+
+#### What Swarms Do Autonomously
+
+- Read epic description and all sub-issues
+- Plan work distribution across agents
+- Coordinate task execution (parallel where possible)
+- Write code, run tests, create PRs
+- Review each other's work
+- Post progress to GitHub
+- Handle blockers and errors
+- Complete entire epic lifecycle
+
+#### Database Storage
+
+```sql
+CREATE TABLE ts_martha.swarms (
+  id UUID PRIMARY KEY,
+  epic_id INTEGER REFERENCES epics(id),
+  worktree_id INTEGER REFERENCES worktrees(id),
+  pid INTEGER,  -- Process ID
+  status VARCHAR(50),  -- spawning|running|paused|completed|crashed
+  config JSONB,  -- claude-flow configuration
+  resource_usage JSONB,  -- CPU, memory, uptime
+  agent_count INTEGER,
+  task_count INTEGER,
+  last_heartbeat TIMESTAMP,
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP
+);
+```
+
+#### Example Workflow
+
+```bash
+# 1. User has GitHub epic #123 with 5 sub-issues
+
+# 2. In Claude Code, spawn a swarm
+> martha__swarm__spawn(epic_number=123, worktree_path="/path/to/work")
+{
+  "swarm_id": "abc-123-def-456",
+  "status": "spawning",
+  "agent_count": 4,
+  "epic_title": "Implement user authentication system"
+}
+
+# 3. Watch in dashboard (https://martha.arch.ie)
+# - See agents spawn
+# - Monitor task progress
+# - View resource usage
+
+# 4. Check GitHub - see progress comments:
+# "🤖 Swarm Progress: Phase 1 Complete - Database schema created"
+# "🤖 Swarm Progress: Phase 2 Complete - API endpoints implemented"
+
+# 5. Query status anytime
+> martha__swarm__status(swarm_id="abc-123-def-456")
+{
+  "status": "running",
+  "agent_count": 4,
+  "task_count": 3,
+  "tasks_completed": 2,
+  "uptime_seconds": 1847,
+  "cpu_percent": 85.3,
+  "memory_mb": 2048
+}
+
+# 6. Swarm completes
+# GitHub comment: "🎉 Swarm Complete: All 5 sub-issues addressed"
+```
+
+### 2. Worktree Management
+
+Worktrees provide isolated development environments for manual development or as workspaces for swarms.
 
 Martha manages multiple git worktrees with full lifecycle support:
 
@@ -31,7 +192,7 @@ Martha manages multiple git worktrees with full lifecycle support:
 - Track: name, branch, base branch, ports, parent relationships, repository
 - Support for multiple repositories (martha.dev-v4, archie-platform-v2)
 
-### 2. Real-Time Monitoring
+### 3. Real-Time Monitoring
 
 Martha provides comprehensive real-time monitoring through worktree agents:
 
@@ -52,7 +213,7 @@ Martha provides comprehensive real-time monitoring through worktree agents:
 - Single warning message instead of continuous errors
 - Automatic permission detection and silent disabling
 
-### 3. Live Dashboard
+### 4. Live Dashboard
 
 React-based web dashboard with real-time updates:
 
@@ -74,7 +235,7 @@ React-based web dashboard with real-time updates:
 - Clean, modern UI with Tailwind CSS
 - Responsive design
 
-### 4. Log Streaming
+### 5. Log Streaming
 
 Server-Sent Events (SSE) based log streaming:
 
@@ -92,7 +253,7 @@ Server-Sent Events (SSE) based log streaming:
 - Heartbeat to keep connections alive
 - Client disconnect handling
 
-### 5. API & WebSocket
+### 6. API & WebSocket
 
 Comprehensive REST and WebSocket APIs:
 
@@ -124,7 +285,7 @@ WS   /ws/client/:clientId             # Client connection
 - `container.detected` - New container found
 - `health.check` - Service health status
 
-### 6. Cloudflare Integration
+### 7. Cloudflare Integration
 
 Declarative tunnel and DNS management:
 
@@ -138,7 +299,7 @@ Declarative tunnel and DNS management:
 - Subdomain routing (martha.arch.ie, martha-api.arch.ie)
 - Proxied through Cloudflare
 
-### 7. Database Management
+### 8. Database Management
 
 PostgreSQL-based data persistence:
 
@@ -152,7 +313,7 @@ PostgreSQL-based data persistence:
 - Migration support
 - Multi-repository tracking
 
-### 8. Redis Integration
+### 9. Redis Integration
 
 Redis for event streaming and pub/sub:
 
@@ -162,7 +323,7 @@ Redis for event streaming and pub/sub:
 - Connection retry with exponential backoff
 - Graceful degradation on connection loss
 
-### 9. MCP Server (Model Context Protocol)
+### 10. MCP Server (Model Context Protocol)
 
 Integration with Claude Code for AI-assisted development:
 
@@ -177,7 +338,7 @@ Integration with Claude Code for AI-assisted development:
 - Version: 3.0.0
 - stdio transport
 
-### 10. Command-Line Tools
+### 11. Command-Line Tools
 
 Bash scripts for common operations:
 
@@ -215,8 +376,23 @@ Bash scripts for common operations:
 
 ## Use Cases
 
-### 1. Parallel Feature Development
-Create isolated worktrees for different features, allowing simultaneous work without conflicts:
+### 1. Autonomous Epic Execution
+Spawn a swarm to autonomously work through an entire GitHub epic:
+```bash
+# Via MCP tool
+martha__swarm__spawn(epic_number=123, worktree_path="/path/to/work")
+
+# Swarm spawns multiple agents that:
+# - Read the epic and all sub-issues
+# - Plan work distribution
+# - Implement features in parallel
+# - Write tests and documentation
+# - Post GitHub updates on progress
+# - Complete the full epic lifecycle
+```
+
+### 2. Parallel Feature Development
+Create isolated worktrees for manual development or as workspaces for swarms:
 ```bash
 # Via MCP tool
 martha__worktree__create_daily()  # Create daily branch
@@ -296,12 +472,7 @@ Each worktree has a `.worktree-config.json`:
 
 ## Roadmap
 
-### Phase 4: Enhanced MCP Integration
-- Additional MCP tools for git operations
-- Swarm orchestration tools
-- Test execution coordination
-
-### Phase 5: Observability
+### Phase 4: Enhanced Observability
 - Braintrust LLM logging
 - Browserbase session replay
 - Prometheus metrics export

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 interface ConfigItem {
   key: string;
@@ -8,7 +8,7 @@ interface ConfigItem {
 }
 
 const SettingsPage = () => {
-  const [config, setConfig] = useState<ConfigItem[]>([
+  const [config] = useState<ConfigItem[]>([
     {
       key: 'SERVICE_PORT',
       value: '21000',
@@ -175,7 +175,7 @@ const SettingsPage = () => {
             <div>
               <div className="text-sm text-neutral-500">Node.js Version</div>
               <div className="text-lg font-semibold text-neutral-900 mt-1">
-                {typeof process !== 'undefined' ? 'v18+' : 'Browser'}
+                v18+ (Server)
               </div>
             </div>
             <div>

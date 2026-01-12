@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface LayoutProps {
@@ -15,6 +15,7 @@ const Layout = ({ children }: LayoutProps) => {
 
   const navItems = [
     { path: '/', label: 'Overview', icon: '📊' },
+    { path: '/logs', label: 'Logs', icon: '📋' },
     { path: '/docs', label: 'Documentation', icon: '📚' },
     { path: '/settings', label: 'Settings', icon: '⚙️' },
   ];

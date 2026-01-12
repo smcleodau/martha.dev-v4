@@ -23,6 +23,11 @@ export interface Worktree {
   containers?: Record<string, any>;
   database?: Record<string, any>;
   status: 'provisioning' | 'active' | 'paused' | 'destroyed';
+  base_branch?: string;
+  parent_worktree_id?: number;
+  created_from_commit?: string;
+  is_daily_branch?: boolean;
+  repository_name?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -112,6 +117,85 @@ export class WorktreeRepository {
   }
 
   /**
+   * Find worktree by branch name
+   */
+  async findByBranchName(branchName: string): Promise<Worktree | null> {
+    try {
+      const result = await pool.query(
+        `SELECT * FROM ts_martha.worktrees WHERE branch_name = $1`,
+        [branchName]
+      );
+
+      return result.rows.length > 0 ? this.mapRow(result.rows[0]) : null;
+    } catch (error) {
+      logger.error('Failed to find worktree by branch name', {
+        branch_name: branchName,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find child worktrees that depend on a parent
+   */
+  async findChildrenOfWorktree(parentId: number): Promise<Worktree[]> {
+    try {
+      const result = await pool.query(
+        `SELECT * FROM ts_martha.worktrees WHERE parent_worktree_id = $1 AND status != $2`,
+        [parentId, 'destroyed']
+      );
+
+      return result.rows.map((row) => this.mapRow(row));
+    } catch (error) {
+      logger.error('Failed to find child worktrees', {
+        parent_id: parentId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find worktrees created from a specific base branch
+   */
+  async findByBaseBranch(baseBranch: string): Promise<Worktree[]> {
+    try {
+      const result = await pool.query(
+        `SELECT * FROM ts_martha.worktrees WHERE base_branch = $1 AND status != $2 ORDER BY created_at DESC`,
+        [baseBranch, 'destroyed']
+      );
+
+      return result.rows.map((row) => this.mapRow(row));
+    } catch (error) {
+      logger.error('Failed to find worktrees by base branch', {
+        base_branch: baseBranch,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Find the daily work branch worktree (if exists)
+   */
+  async findDailyBranch(): Promise<Worktree | null> {
+    try {
+      const result = await pool.query(
+        `SELECT * FROM ts_martha.worktrees WHERE is_daily_branch = TRUE AND status = $1 ORDER BY created_at DESC LIMIT 1`,
+        ['active']
+      );
+
+      return result.rows.length > 0 ? this.mapRow(result.rows[0]) : null;
+    } catch (error) {
+      logger.error('Failed to find daily branch', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Create a new worktree
    */
   async create(data: {
@@ -122,13 +206,20 @@ export class WorktreeRepository {
     index: number;
     ports: Worktree['ports'];
     status?: 'provisioning' | 'active' | 'paused' | 'destroyed';
+    baseBranch?: string;
+    parentWorktreeId?: number;
+    createdFromCommit?: string;
+    isDailyBranch?: boolean;
+    repositoryName?: string;
   }): Promise<Worktree> {
     try {
       const result = await pool.query(
         `INSERT INTO ts_martha.worktrees (
-          name, epic_id, path, branch_name, index, ports, status, created_at, updated_at
+          name, epic_id, path, branch_name, index, ports, status,
+          base_branch, parent_worktree_id, created_from_commit, is_daily_branch, repository_name,
+          created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
         RETURNING *`,
         [
           data.name,
@@ -138,12 +229,19 @@ export class WorktreeRepository {
           data.index,
           JSON.stringify(data.ports),
           data.status || 'provisioning',
+          data.baseBranch || null,
+          data.parentWorktreeId || null,
+          data.createdFromCommit || null,
+          data.isDailyBranch || false,
+          data.repositoryName || 'martha.dev-v4',
         ]
       );
 
       logger.info('Worktree created', {
         worktree_id: result.rows[0].id,
         name: data.name,
+        base_branch: data.baseBranch,
+        is_daily_branch: data.isDailyBranch,
       });
 
       return this.mapRow(result.rows[0]);
@@ -254,6 +352,11 @@ export class WorktreeRepository {
           : row.database
         : undefined,
       status: row.status,
+      base_branch: row.base_branch || undefined,
+      parent_worktree_id: row.parent_worktree_id || undefined,
+      created_from_commit: row.created_from_commit || undefined,
+      is_daily_branch: row.is_daily_branch || false,
+      repository_name: row.repository_name || undefined,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };

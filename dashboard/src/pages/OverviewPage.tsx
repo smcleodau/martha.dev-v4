@@ -8,6 +8,7 @@ interface WorktreeStatus {
   agentVersion: string;
   ports: Record<string, number>;
   health: Record<string, string>;
+  path: string;
 }
 
 interface ServiceHealth {
@@ -26,8 +27,8 @@ const OverviewPage = () => {
   const fetchData = async () => {
     try {
       const [healthRes, worktreesRes] = await Promise.all([
-        axios.get<ServiceHealth>('http://localhost:21000/health'),
-        axios.get<{ worktrees: WorktreeStatus[] }>('http://localhost:21000/api/v1/worktrees'),
+        axios.get<ServiceHealth>('/health'),
+        axios.get<{ worktrees: WorktreeStatus[] }>('/api/v1/worktrees'),
       ]);
 
       setServiceHealth(healthRes.data);
@@ -124,12 +125,16 @@ const OverviewPage = () => {
                     <div className="grid grid-cols-2 gap-4 text-sm text-neutral-600">
                       <div>
                         <span className="text-neutral-500">Agent Version:</span>{' '}
-                        {worktree.agentVersion}
+                        {worktree.agentVersion || 'N/A'}
                       </div>
                       <div>
                         <span className="text-neutral-500">Last Seen:</span>{' '}
-                        {new Date(worktree.lastSeen).toLocaleString()}
+                        {worktree.lastSeen ? new Date(worktree.lastSeen).toLocaleString() : 'N/A'}
                       </div>
+                    </div>
+                    <div className="mt-2 text-sm text-neutral-600">
+                      <span className="text-neutral-500">Directory:</span>{' '}
+                      <span className="font-mono text-xs">{worktree.path}</span>
                     </div>
                     {Object.keys(worktree.ports).length > 0 && (
                       <div className="mt-3 pt-3 border-t border-neutral-200">
@@ -156,7 +161,7 @@ const OverviewPage = () => {
         <h2 className="text-xl font-semibold mb-4">Quick Links</h2>
         <div className="grid grid-cols-2 gap-4">
           <a
-            href="http://localhost:21000/health"
+            href="/health"
             target="_blank"
             rel="noopener noreferrer"
             className="p-4 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
@@ -165,7 +170,7 @@ const OverviewPage = () => {
             <div className="text-xs text-neutral-500 mt-1">Service health check</div>
           </a>
           <a
-            href="http://localhost:21000/api/v1/worktrees"
+            href="/api/v1/worktrees"
             target="_blank"
             rel="noopener noreferrer"
             className="p-4 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"

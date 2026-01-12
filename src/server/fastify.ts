@@ -1,14 +1,21 @@
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 import { appConfig } from '../config/index.js';
 import { createLogger } from '../utils/logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 import dashboardRoutes from './routes/dashboard.js';
 import { healthRoutes } from './routes/health.js';
 import { websocketRoutes } from './routes/websocket.js';
 import { worktreeRoutes } from './routes/worktrees.js';
+import { logsRoutes } from './routes/logs.js';
 import { registerHookRoutes } from './routes/hooks.js';
 import { registerSwarmRoutes } from './routes/swarms.js';
 import { testRoutes } from './routes/tests.js';
@@ -80,14 +87,46 @@ export async function createServer() {
     });
   });
 
-  // Register routes
-  await server.register(dashboardRoutes); // Dashboard must be first for root route
+  // Register API routes first
   await server.register(healthRoutes);
   await server.register(websocketRoutes);
   await server.register(worktreeRoutes);
+  await server.register(logsRoutes);
   await registerHookRoutes(server);
   await registerSwarmRoutes(server);
   await server.register(testRoutes);
+  await server.register(dashboardRoutes); // Changelog API
+
+  // Register static file serving for React dashboard (after all API routes)
+  const dashboardDistPath = join(__dirname, '../../../dashboard/dist');
+  serverLogger.info('Registering static files', { path: dashboardDistPath });
+
+  try {
+    await server.register(fastifyStatic, {
+      root: dashboardDistPath,
+      prefix: '/',
+    });
+    serverLogger.info('Static files registered successfully');
+
+    // Fallback for SPA routing - serve index.html for any unmatched routes
+    // But only for HTML requests, not for assets
+    server.setNotFoundHandler(async (request, reply) => {
+      const url = request.url.split('?')[0]; // Remove query params
+      // If the request is for an asset (has file extension), return 404
+      if (url.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|json)$/)) {
+        return reply.code(404).send({ error: 'Asset not found', url: request.url });
+      }
+      // Otherwise, serve index.html for SPA routing
+      return reply.sendFile('index.html');
+    });
+  } catch (error) {
+    console.error('Static file registration error:', error);
+    serverLogger.error('Failed to register static files', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw error;
+  }
 
   return server;
 }

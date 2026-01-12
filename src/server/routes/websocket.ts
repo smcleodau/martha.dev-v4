@@ -31,6 +31,21 @@ export async function websocketRoutes(fastify: FastifyInstance) {
         try {
           const message = JSON.parse(data.toString());
 
+          // Handle agent startup event
+          if (message.type === 'agent.startup') {
+            const status = connectionManager.getWorktreeStatus(worktree);
+            if (status && message.data) {
+              if (message.data.agent_version) {
+                status.agentVersion = message.data.agent_version;
+              }
+              if (message.data.ports) {
+                connectionManager.updateWorktreePorts(worktree, message.data.ports);
+              }
+            }
+            logger.info(`Agent startup: ${worktree} v${message.data?.agent_version || 'unknown'}`);
+            // Continue processing as a regular event
+          }
+
           // Handle different message types
           if (message.type === 'heartbeat') {
             // Update worktree status

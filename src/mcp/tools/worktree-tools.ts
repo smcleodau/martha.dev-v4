@@ -2,9 +2,12 @@ import axios from 'axios';
 import { createLogger } from '../../utils/logger.js';
 import { appConfig } from '../../config/index.js';
 import { worktreeManager } from '../../core/worktree-manager.js';
+import { getWorktreeRepository } from '../../database/repositories/worktree-repository.js';
+import { getRepositoryConfig } from '../../config/repositories.js';
 import type { ToolResponse, WorktreeStatus } from '../types.js';
 
 const logger = createLogger({ module: 'worktree-tools' });
+const worktreeRepository = getWorktreeRepository();
 
 /**
  * Worktree management tools
@@ -18,6 +21,8 @@ export class WorktreeTools {
 
   async handle(toolName: string, args: Record<string, unknown>): Promise<ToolResponse> {
     switch (toolName) {
+      case 'martha__worktree__create_daily':
+        return await this.createDailyBranch(args);
       case 'martha__worktree__create':
         return await this.createWorktree(args);
       case 'martha__worktree__get_status':
@@ -32,10 +37,76 @@ export class WorktreeTools {
   }
 
   /**
+   * Create a daily work branch
+   */
+  private async createDailyBranch(args: Record<string, unknown>): Promise<ToolResponse> {
+    const { repository } = args;
+    const repoName = typeof repository === 'string' ? repository : 'martha';
+
+    logger.info('Creating daily work branch via MCP tool', { repository: repoName });
+
+    try {
+      const config = getRepositoryConfig(repoName);
+      const worktree = await worktreeManager.createDailyBranch(config);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                daily_branch: {
+                  name: worktree.name,
+                  branch: worktree.branch_name,
+                  path: worktree.path,
+                  repository: worktree.repository_name,
+                  ports: worktree.ports,
+                  base: worktree.base_branch,
+                  created_from: worktree.created_from_commit,
+                },
+                message: `Daily work branch created: ${worktree.branch_name}`,
+                usage: `Now create feature worktrees with: martha__worktree__create(epic_number=123, base_branch="${worktree.branch_name}", repository="${repoName}")`,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error('Failed to create daily branch', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                suggestion:
+                  error instanceof Error && error.message.includes('already exists')
+                    ? 'A daily branch for today already exists. Use martha__worktree__list_all to see existing worktrees.'
+                    : 'Check the logs for more details.',
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  /**
    * Create a new worktree
    */
   private async createWorktree(args: Record<string, unknown>): Promise<ToolResponse> {
-    const { epic_number, branch_name } = args;
+    const { epic_number, branch_name, base_branch, repository } = args;
 
     // Validate args
     if (typeof epic_number !== 'number') {
@@ -43,14 +114,40 @@ export class WorktreeTools {
     }
 
     const branchName = typeof branch_name === 'string' ? branch_name : `epic-${epic_number}`;
+    const baseBranch = typeof base_branch === 'string' ? base_branch : 'develop';
+    const repoName = typeof repository === 'string' ? repository : 'martha';
 
-    logger.info('Creating worktree via MCP tool', { epic_number, branch_name: branchName });
+    logger.info('Creating worktree via MCP tool', {
+      epic_number,
+      branch_name: branchName,
+      base_branch: baseBranch,
+      repository: repoName
+    });
+
+    const config = getRepositoryConfig(repoName);
+
+    // If baseBranch is not 'develop', find the parent worktree
+    let parentWorktreeId: number | undefined;
+    if (baseBranch !== 'develop' && !baseBranch.startsWith('origin/')) {
+      const parentWorktree = await worktreeRepository.findByBranchName(baseBranch);
+      if (parentWorktree) {
+        parentWorktreeId = parentWorktree.id;
+        logger.info('Found parent worktree', {
+          parent_id: parentWorktreeId,
+          parent_name: parentWorktree.name
+        });
+      } else {
+        logger.warn('Parent worktree not found for base_branch', { base_branch: baseBranch });
+      }
+    }
 
     try {
       const worktree = await worktreeManager.createWorktree({
         epicNumber: epic_number,
         branchName,
-        baseBranch: 'develop',
+        baseBranch,
+        parentWorktreeId,
+        config,
       });
 
       return {
@@ -64,11 +161,16 @@ export class WorktreeTools {
                   name: worktree.name,
                   path: worktree.path,
                   branch: worktree.branch_name,
+                  repository: worktree.repository_name,
+                  base_branch: worktree.base_branch,
+                  parent: parentWorktreeId
+                    ? `Depends on worktree #${parentWorktreeId}`
+                    : 'Independent',
                   index: worktree.index,
                   ports: worktree.ports,
                   status: worktree.status,
                 },
-                message: `Worktree created successfully at ${worktree.path}`,
+                message: `Worktree created successfully from ${baseBranch}`,
                 next_steps: [
                   'The worktree is now active and being monitored',
                   `Access the environment at ports ${worktree.ports.service}-${worktree.ports.dashboard}`,
@@ -184,16 +286,18 @@ export class WorktreeTools {
    * Destroy a worktree
    */
   private async destroyWorktree(args: Record<string, unknown>): Promise<ToolResponse> {
-    const { worktree_name } = args;
+    const { worktree_name, force } = args;
 
     if (typeof worktree_name !== 'string') {
       throw new Error('worktree_name must be a string');
     }
 
-    logger.info('Destroying worktree via MCP tool', { worktree_name });
+    const forceDelete = typeof force === 'boolean' ? force : false;
+
+    logger.info('Destroying worktree via MCP tool', { worktree_name, force: forceDelete });
 
     try {
-      await worktreeManager.destroyWorktree(worktree_name);
+      await worktreeManager.destroyWorktree(worktree_name, forceDelete);
 
       return {
         content: [
@@ -222,6 +326,33 @@ export class WorktreeTools {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
 
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+
+      // Check if it's a dependency error
+      if (errorMsg.includes('dependent worktree')) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: 'Cannot destroy: dependent worktrees exist',
+                  message: errorMsg,
+                  suggestion:
+                    'Destroy child worktrees first or use force=true parameter to override.',
+                  worktree_name,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      // Other errors
       return {
         content: [
           {
@@ -229,7 +360,7 @@ export class WorktreeTools {
             text: JSON.stringify(
               {
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
+                error: errorMsg,
                 worktree_name,
               },
               null,

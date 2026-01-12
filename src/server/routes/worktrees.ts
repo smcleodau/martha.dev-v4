@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { connectionManager } from '../../core/connection-manager.js';
 import { getEventHistory, getEventCount } from '../../redis/event-store.js';
+import { getWorktreeRepository } from '../../database/repositories/worktree-repository.js';
 import { createLogger } from '../../utils/logger.js';
 
 const logger = createLogger({ module: 'worktrees' });
@@ -13,14 +14,49 @@ export async function worktreeRoutes(fastify: FastifyInstance) {
    * List all worktrees
    */
   fastify.get('/api/v1/worktrees', async (_request: FastifyRequest, reply: FastifyReply) => {
-    const worktrees = connectionManager.getAllWorktreeStatuses();
+    try {
+      // Get all registered worktrees from database
+      const worktreeRepo = getWorktreeRepository();
+      const dbWorktrees = await worktreeRepo.findAll();
 
-    return reply.send({
-      worktrees,
-      total: worktrees.length,
-      online: worktrees.filter((w) => w.status === 'online').length,
-      offline: worktrees.filter((w) => w.status === 'offline').length,
-    });
+      // Get connection statuses from connection manager
+      const connectionStatuses = connectionManager.getAllWorktreeStatuses();
+
+      // Merge database worktrees with connection status
+      const worktrees = dbWorktrees.map((wt) => {
+        const connectionStatus = connectionStatuses.find((cs) => cs.name === wt.name);
+
+        return {
+          name: wt.name,
+          branch: wt.branch_name,
+          index: wt.index,
+          ports: wt.ports,
+          status: connectionStatus?.status || 'offline',
+          baseBranch: wt.base_branch,
+          repository: wt.repository_name || 'martha.dev-v4',
+          isDailyBranch: wt.is_daily_branch,
+          path: wt.path,
+          lastSeen: connectionStatus?.lastSeen,
+          agentVersion: connectionStatus?.agentVersion,
+          agentInfo: connectionStatus?.agentInfo,
+        };
+      });
+
+      return reply.send({
+        worktrees,
+        total: worktrees.length,
+        online: worktrees.filter((w) => w.status === 'online').length,
+        offline: worktrees.filter((w) => w.status === 'offline').length,
+      });
+    } catch (error) {
+      logger.error('Failed to retrieve worktrees', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      return reply.code(500).send({
+        error: 'Failed to retrieve worktrees',
+      });
+    }
   });
 
   /**

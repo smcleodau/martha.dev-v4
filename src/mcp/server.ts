@@ -109,11 +109,27 @@ class MarthaServer {
           },
         },
 
-        // Worktree Management Tools (4)
+        // Worktree Management Tools (5)
+        {
+          name: 'martha__worktree__create_daily',
+          description:
+            'Create a daily work branch worktree from origin/develop. Use this as the base for all feature branches during the day. Automatically names the branch work-YYYY-MM-DD.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              repository: {
+                type: 'string',
+                description: 'Repository name: "martha" or "archie" (default: "martha")',
+                enum: ['martha', 'archie'],
+              },
+            },
+            required: [],
+          },
+        },
         {
           name: 'martha__worktree__create',
           description:
-            'Create a new git worktree with Docker environment and Cloudflare tunnels',
+            'Create a new git worktree for an epic with Docker environment and Cloudflare tunnels',
           inputSchema: {
             type: 'object',
             properties: {
@@ -127,10 +143,20 @@ class MarthaServer {
               },
               epic_number: {
                 type: 'number',
-                description: 'Optional GitHub epic number to associate',
+                description: 'GitHub epic number to associate',
+              },
+              base_branch: {
+                type: 'string',
+                description:
+                  'Base branch to create from (defaults to "develop"). Use the daily work branch name to create dependent worktrees.',
+              },
+              repository: {
+                type: 'string',
+                description: 'Repository name: "martha" or "archie" (default: "martha")',
+                enum: ['martha', 'archie'],
               },
             },
-            required: ['name', 'branch_name'],
+            required: ['epic_number'],
           },
         },
         {
@@ -150,13 +176,18 @@ class MarthaServer {
         {
           name: 'martha__worktree__destroy',
           description:
-            'Destroy a worktree (stops containers, removes tunnels, deletes worktree)',
+            'Destroy a worktree (stops containers, removes tunnels, deletes worktree). Will warn if dependent worktrees exist.',
           inputSchema: {
             type: 'object',
             properties: {
               worktree_name: {
                 type: 'string',
                 description: 'Name of the worktree',
+              },
+              force: {
+                type: 'boolean',
+                description:
+                  'Force deletion even if dependent worktrees exist (default: false)',
               },
             },
             required: ['worktree_name'],

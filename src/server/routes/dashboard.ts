@@ -37,7 +37,9 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Root route - Dashboard UI
+  // Legacy dashboard route - now served via static files
+  // Root route - Dashboard UI (DISABLED - using React dashboard instead)
+  /*
   fastify.get('/', async (_request: FastifyRequest, reply: FastifyReply) => {
     const html = `
 <!DOCTYPE html>
@@ -592,4 +594,5 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
     reply.type('text/html');
     return reply.send(html);
   });
+  */
 }

@@ -26,6 +26,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed-dev-data.ts",
     "validate": "tsx scripts/validate-phase1.ts",
+    "agent": "tsx src/agents/index.ts",
+    "agent:build": "swc src/agents -d dist/agents --copy-files",
+    "agent:start": "node dist/agents/index.js",
     "prepare": "husky install || true"
   },
   "keywords": [

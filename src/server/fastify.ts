@@ -10,6 +10,7 @@ import { websocketRoutes } from './routes/websocket.js';
 import { worktreeRoutes } from './routes/worktrees.js';
 import { registerHookRoutes } from './routes/hooks.js';
 import { registerSwarmRoutes } from './routes/swarms.js';
+import { testRoutes } from './routes/tests.js';
 
 const serverLogger = createLogger({ module: 'fastify' });
 
@@ -84,6 +85,7 @@ export async function createServer() {
   await server.register(worktreeRoutes);
   await registerHookRoutes(server);
   await registerSwarmRoutes(server);
+  await server.register(testRoutes);
 
   return server;
 }

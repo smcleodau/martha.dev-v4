@@ -13,6 +13,7 @@ import { WorktreeTools } from './tools/worktree-tools.js';
 import { EventTools } from './tools/event-tools.js';
 import { TunnelTools } from './tools/tunnel-tools.js';
 import { SwarmTools } from './tools/swarm-tools.js';
+import { TestTools } from './tools/test-tools.js';
 
 const logger = createLogger({ module: 'mcp-server' });
 
@@ -29,6 +30,7 @@ class MarthaServer {
   private eventTools: EventTools;
   private tunnelTools: TunnelTools;
   private swarmTools: SwarmTools;
+  private testTools: TestTools;
 
   constructor() {
     this.server = new Server(
@@ -49,6 +51,7 @@ class MarthaServer {
     this.eventTools = new EventTools();
     this.tunnelTools = new TunnelTools();
     this.swarmTools = new SwarmTools();
+    this.testTools = new TestTools();
 
     this.setupHandlers();
   }
@@ -303,6 +306,70 @@ class MarthaServer {
             properties: {},
           },
         },
+
+        // Test Management Tools (3)
+        {
+          name: 'martha__test__trigger',
+          description:
+            'Trigger test execution for a worktree. Tests run asynchronously - use martha__test__get_results to check status.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              worktree_name: {
+                type: 'string',
+                description: 'Name of the worktree to test',
+              },
+              suites: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Test suites to run (e.g., ["jest", "playwright", "pytest"])',
+              },
+              issue_number: {
+                type: 'number',
+                description: 'Optional GitHub issue number to associate',
+              },
+            },
+            required: ['worktree_name', 'suites'],
+          },
+        },
+        {
+          name: 'martha__test__get_results',
+          description:
+            'Get test execution results by ID. Shows current status and results if completed.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              test_execution_id: {
+                type: 'string',
+                description: 'UUID of the test execution',
+              },
+            },
+            required: ['test_execution_id'],
+          },
+        },
+        {
+          name: 'martha__test__get_history',
+          description:
+            'Get test execution history. Filter by worktree_name OR issue_number (not both).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              worktree_name: {
+                type: 'string',
+                description: 'Filter by worktree name',
+              },
+              issue_number: {
+                type: 'number',
+                description: 'Filter by issue number',
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of results to return (default: 50)',
+                default: 50,
+              },
+            },
+          },
+        },
       ];
 
       return { tools };
@@ -327,6 +394,8 @@ class MarthaServer {
           return await this.tunnelTools.handle(name, toolArgs);
         } else if (name.startsWith('martha__swarm__')) {
           return await this.swarmTools.handle(name, toolArgs);
+        } else if (name.startsWith('martha__test__')) {
+          return await this.testTools.handle(name, toolArgs);
         }
 
         throw new Error(`Unknown tool: ${name}`);
@@ -353,7 +422,7 @@ class MarthaServer {
 
     logger.info('Martha MCP Server started', {
       version: MCP_VERSION,
-      tools: 15, // 3 epic, 4 worktree, 2 event, 2 tunnel, 4 swarm
+      tools: 18, // 3 epic, 4 worktree, 2 event, 2 tunnel, 4 swarm, 3 test
     });
   }
 }

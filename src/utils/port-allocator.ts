@@ -1,4 +1,4 @@
-import { worktreeRepository } from '../database/repositories/worktree-repository.js';
+import { getWorktreeRepository } from '../database/repositories/worktree-repository.js';
 
 /**
  * Port configuration for a worktree
@@ -23,7 +23,7 @@ export interface PortConfig {
  */
 export async function findNextAvailableIndex(): Promise<number> {
   // Query database for all allocated indices
-  const worktrees = await worktreeRepository.findAll();
+  const worktrees = await getWorktreeRepository().findAll();
   const usedIndices = new Set(worktrees.map(wt => wt.index));
 
   // Reserved indices
@@ -72,7 +72,7 @@ export async function isIndexAvailable(index: number): Promise<boolean> {
   }
 
   // Check database
-  const worktrees = await worktreeRepository.findAll();
+  const worktrees = await getWorktreeRepository().findAll();
   const usedIndices = worktrees.map(wt => wt.index);
 
   return !usedIndices.includes(index);
@@ -82,6 +82,6 @@ export async function isIndexAvailable(index: number): Promise<boolean> {
  * Get all allocated port indices
  */
 export async function getAllocatedIndices(): Promise<number[]> {
-  const worktrees = await worktreeRepository.findAll();
+  const worktrees = await getWorktreeRepository().findAll();
   return worktrees.map(wt => wt.index).sort((a, b) => a - b);
 }

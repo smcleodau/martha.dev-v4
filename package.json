@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "swc src -d dist --copy-files",
+    "build": "swc src -d dist --copy-files && ./scripts/fix-esm-imports.sh",
     "start": "node dist/src/index.js",
     "test": "jest",
     "test:unit": "jest tests/unit",

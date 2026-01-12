@@ -20,8 +20,8 @@ from rich.layout import Layout
 from rich import box
 
 # Configuration
-SERVICE_URL = "ws://localhost:9000"
-SERVICE_HTTP = "http://localhost:9000"
+SERVICE_URL = "ws://localhost:20000"
+SERVICE_HTTP = "http://localhost:20000"
 
 console = Console()
 
@@ -404,6 +404,72 @@ def health(ctx):
 
     except Exception as e:
         console.print(f"[red]❌ Service Unhealthy: {e}[/red]")
+
+@cli.command()
+@click.argument('worktree')
+@click.pass_context
+def provision_tunnels(ctx, worktree):
+    """
+    Provision DNS + tunnels for a worktree from its config
+
+    Example: python cli_client.py provision-tunnels martha-monitoring
+    """
+    import requests
+    from pathlib import Path
+
+    service_http = ctx.obj['SERVICE_URL'].replace('ws://', 'http://').replace('wss://', 'https://')
+
+    # Determine config path based on worktree name
+    if worktree == "martha-monitoring":
+        config_path = "/home/archiedev/.martha/.worktree-config.json"
+    else:
+        # For other worktrees, look in standard location
+        registry_file = Path("/home/archiedev/.martha/registry.json")
+        if registry_file.exists():
+            with open(registry_file) as f:
+                import json
+                registry = json.load(f)
+                for wt in registry["worktrees"]:
+                    if wt["name"] == worktree:
+                        config_path = str(Path(wt["path"]) / ".worktree-config.json")
+                        break
+                else:
+                    console.print(f"[red]❌ Worktree '{worktree}' not found in registry[/red]")
+                    return
+        else:
+            console.print(f"[red]❌ Registry file not found[/red]")
+            return
+
+    console.print(f"[cyan]🌐 Provisioning tunnels for {worktree}...[/cyan]")
+    console.print(f"[dim]Using config: {config_path}[/dim]\n")
+
+    try:
+        response = requests.post(
+            f"{service_http}/api/v1/worktrees/{worktree}/provision-from-config",
+            json={"config_path": config_path},
+            timeout=60
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            console.print(f"[green]✅ Provisioned tunnels for {worktree}[/green]\n")
+
+            if result["routes"]:
+                console.print("[bold cyan]Provisioned Routes:[/bold cyan]")
+                for route in result["routes"]:
+                    console.print(f"  • [cyan]{route['hostname']}[/cyan] → {route['service']}")
+                    if route.get("description"):
+                        console.print(f"    [dim]{route['description']}[/dim]")
+                console.print(f"\n[dim]Tunnel ID: {result['tunnel_id']}[/dim]")
+            else:
+                console.print("[yellow]No routes were provisioned (tunnels may be disabled)[/yellow]")
+
+        else:
+            error_detail = response.json().get("detail", response.text)
+            console.print(f"[red]❌ Failed: {error_detail}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]❌ Error: {e}[/red]")
 
 # ============================================================================
 # Main Entry Point

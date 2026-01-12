@@ -488,6 +488,253 @@ class CloudflareManager:
         except Exception as e:
             logger.error(f"Error updating .env.local file: {e}")
 
+    async def _get_tunnel_config(self, tunnel_id: str) -> Optional[dict]:
+        """
+        Get current tunnel configuration from Cloudflare API
+
+        Returns the ingress configuration for the tunnel
+        """
+        try:
+            import httpx
+
+            # Get account ID from zone
+            headers = {
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json"
+            }
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Get account ID
+                zone_url = f"https://api.cloudflare.com/client/v4/zones/{self.zone_id}"
+                zone_response = await client.get(zone_url, headers=headers)
+
+                if zone_response.status_code != 200:
+                    logger.error(f"Failed to get zone details: {zone_response.text}")
+                    return None
+
+                account_id = zone_response.json()["result"]["account"]["id"]
+
+                # Get tunnel configuration
+                config_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
+                config_response = await client.get(config_url, headers=headers)
+
+                if config_response.status_code == 200:
+                    result = config_response.json()
+                    if result.get("result") and "config" in result["result"]:
+                        return result["result"]["config"]
+                    else:
+                        logger.warning("No configuration found in response")
+                        return {"ingress": [{"service": "http_status:404"}]}
+                else:
+                    logger.error(f"Failed to get tunnel config: {config_response.text}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"Error getting tunnel config: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+
+    async def _update_tunnel_config(self, tunnel_id: str, config: dict) -> bool:
+        """
+        Update tunnel configuration via Cloudflare API
+
+        Args:
+            tunnel_id: Cloudflare tunnel ID
+            config: Configuration dict with ingress rules
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            import httpx
+
+            # Get account ID from zone
+            headers = {
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json"
+            }
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Get account ID
+                zone_url = f"https://api.cloudflare.com/client/v4/zones/{self.zone_id}"
+                zone_response = await client.get(zone_url, headers=headers)
+
+                if zone_response.status_code != 200:
+                    logger.error(f"Failed to get zone details: {zone_response.text}")
+                    return False
+
+                account_id = zone_response.json()["result"]["account"]["id"]
+
+                # Update tunnel configuration
+                config_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
+
+                # Wrap config in the expected format
+                payload = {
+                    "config": config
+                }
+
+                config_response = await client.put(config_url, headers=headers, json=payload)
+
+                if config_response.status_code == 200:
+                    logger.info(f"✅ Updated tunnel configuration for {tunnel_id}")
+                    return True
+                else:
+                    logger.error(f"Failed to update tunnel config: {config_response.text}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"Error updating tunnel config: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+    async def _provision_route(self, tunnel_id: str, route: dict) -> bool:
+        """
+        Provision a single route: DNS record + tunnel ingress entry
+
+        Args:
+            tunnel_id: Cloudflare tunnel ID
+            route: Route configuration dict with hostname, service, etc.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            hostname = route["hostname"]
+            service = route["service"]
+
+            logger.info(f"Provisioning route: {hostname} → {service}")
+
+            # 1. Create DNS CNAME record
+            await self._create_dns_record(hostname, tunnel_id)
+
+            # 2. Get current tunnel config
+            current_config = await self._get_tunnel_config(tunnel_id)
+            if not current_config:
+                logger.error("Failed to get current tunnel configuration")
+                return False
+
+            # 3. Check if route already exists
+            ingress = current_config.get("ingress", [])
+            route_exists = False
+            for existing_route in ingress:
+                if existing_route.get("hostname") == hostname:
+                    logger.info(f"Route already exists: {hostname}")
+                    route_exists = True
+                    break
+
+            if not route_exists:
+                # 4. Add new ingress route (before the catch-all at the end)
+                new_route = {
+                    "hostname": hostname,
+                    "service": service,
+                    "originRequest": {"noTLSVerify": True}
+                }
+
+                # Remove catch-all if it exists
+                catch_all = None
+                filtered_ingress = []
+                for r in ingress:
+                    if "hostname" not in r:
+                        catch_all = r
+                    else:
+                        filtered_ingress.append(r)
+
+                # Add new route
+                filtered_ingress.append(new_route)
+
+                # Add catch-all back
+                if catch_all:
+                    filtered_ingress.append(catch_all)
+                else:
+                    filtered_ingress.append({"service": "http_status:404"})
+
+                current_config["ingress"] = filtered_ingress
+
+                # 5. Update tunnel config via API
+                success = await self._update_tunnel_config(tunnel_id, current_config)
+                if not success:
+                    logger.error("Failed to update tunnel configuration")
+                    return False
+
+            logger.info(f"✅ Provisioned route: {hostname} → {service}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error provisioning route: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+    async def provision_from_config(self, worktree_name: str, config_path: str) -> dict:
+        """
+        Provision DNS + tunnels declaratively from worktree config
+
+        Reads .worktree-config.json, extracts tunnel spec, and provisions:
+        1. DNS CNAME records for each hostname
+        2. Updates tunnel ingress configuration via Cloudflare API
+
+        Args:
+            worktree_name: Name of the worktree
+            config_path: Path to .worktree-config.json file
+
+        Returns:
+            Dict with provisioned routes and tunnel_id
+
+        Raises:
+            Exception if provisioning fails
+        """
+        logger.info(f"🌐 Provisioning tunnels from config for {worktree_name}")
+
+        # Read config
+        import json
+        from pathlib import Path
+
+        config_file = Path(config_path)
+        if not config_file.exists():
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+
+        with open(config_file) as f:
+            config = json.load(f)
+
+        tunnel_spec = config.get("tunnels", {})
+
+        if not tunnel_spec.get("enabled"):
+            logger.info(f"Tunnels disabled for {worktree_name}")
+            return {
+                "status": "disabled",
+                "routes": [],
+                "tunnel_id": None
+            }
+
+        tunnel_id = tunnel_spec.get("tunnel_id")
+        if not tunnel_id:
+            raise ValueError("tunnel_id not specified in config")
+
+        routes = tunnel_spec.get("routes", [])
+
+        # Provision each enabled route
+        provisioned_routes = []
+        for route in routes:
+            if route.get("enabled", True):
+                success = await self._provision_route(tunnel_id, route)
+                if success:
+                    provisioned_routes.append({
+                        "hostname": route["hostname"],
+                        "service": route["service"],
+                        "type": route.get("type", "unknown"),
+                        "description": route.get("description", "")
+                    })
+
+        logger.info(f"✅ Provisioned {len(provisioned_routes)} routes for {worktree_name}")
+
+        return {
+            "status": "success",
+            "routes": provisioned_routes,
+            "tunnel_id": tunnel_id
+        }
+
     async def destroy_tunnel(self, worktree_name: str) -> bool:
         """
         Completely destroy a Cloudflare tunnel

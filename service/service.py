@@ -709,6 +709,59 @@ async def disable_tunnel(worktree: str):
         "message": "Tunnel stopped but configuration preserved"
     }
 
+@app.post("/api/v1/worktrees/{worktree}/provision-from-config")
+async def provision_worktree_from_config(worktree: str, body: dict):
+    """
+    Provision tunnels + DNS for a worktree based on its .worktree-config.json
+
+    This reads the worktree's config file and provisions all declared routes.
+
+    Args:
+        worktree: Worktree name
+        body: Dict with config_path
+
+    Returns:
+        Provisioning result with routes and tunnel_id
+    """
+    if not app.state.cloudflare:
+        raise HTTPException(
+            status_code=503,
+            detail="Cloudflare integration not configured"
+        )
+
+    config_path = body.get("config_path")
+    if not config_path:
+        raise HTTPException(
+            status_code=400,
+            detail="config_path is required in request body"
+        )
+
+    from pathlib import Path
+    if not Path(config_path).exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Config file not found: {config_path}"
+        )
+
+    try:
+        result = await app.state.cloudflare.provision_from_config(
+            worktree,
+            config_path
+        )
+
+        return {
+            "status": "success",
+            "worktree": worktree,
+            "routes": result["routes"],
+            "tunnel_id": result["tunnel_id"]
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to provision {worktree}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============================================================================
 # Helper Functions
 # ============================================================================

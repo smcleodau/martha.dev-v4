@@ -108,9 +108,9 @@ Open https://martha.arch.ie in your browser to:
 Martha does **not** interfere with Claude Code starting. They are separate:
 
 - **Claude Code** - AI coding assistant CLI tool
-- **Martha** - Background service for worktree management
+- **Martha** - TypeScript/Node.js service for worktree management and issue tracking
 
-If Claude Code won't start, it's a separate issue (likely Python environment issue, not Martha).
+If Claude Code won't start, it's a separate issue unrelated to Martha.
 
 ## Quick Start Guide
 

@@ -1,424 +1,476 @@
-# Martha.dev MAPDS - Installation Guide
+# Martha.dev v4 - Installation Guide
 
-**Multi-Agent Parallel Development System**
+**Next-generation TypeScript service for worktree management, issue tracking, and development monitoring**
 
 ## Prerequisites
 
-- Python 3.8+
-- Docker and Docker Compose
-- Redis (for event storage)
-- Git worktrees already set up
-- (Optional) Cloudflare account with API token
+- **Node.js** 18+ and npm
+- **PostgreSQL** 14+ (for worktree registry and metrics)
+- **Redis** (optional, for pub/sub events)
+- **Docker** and Docker Compose (optional, for containerized deployment)
+- **Git** with worktrees configured
+- (Optional) **Cloudflare** account with API token for tunnels
 
 ## System Requirements
 
 - Linux/macOS (Windows WSL2 supported)
 - 4GB RAM minimum (8GB recommended)
-- Docker socket access for user account
-- Network ports available (9000 for service, worktree-specific ports)
+- Network ports available:
+  - 20000: Main service (API + Dashboard)
+  - 20001: MCP server
+  - 5432: PostgreSQL (if running locally)
+  - 6379: Redis (if running locally)
 
-## Installation Steps
-
-### 1. Clone Repository
+## Quick Start
 
 ```bash
+# Clone repository
 git clone https://github.com/yourusername/martha.dev-v4.git
 cd martha.dev-v4
-```
-
-### 2. Install Python Dependencies
-
-```bash
-# Create virtual environment (recommended)
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+npm install
+cd dashboard && npm install && cd ..
+
+# Set up environment configuration
+cp .env.local.template .env.local
+# Edit .env.local with your settings
+
+# Set up database
+npm run db:setup
+
+# Build the service
+npm run build
+
+# Build the dashboard
+cd dashboard && npm run build && cd ..
+
+# Start the service
+npm start
 ```
 
-### 3. Create Configuration Directory
+The service will be available at:
+- **Dashboard**: http://localhost:20000
+- **API**: http://localhost:20000/api
+- **Tracker**: http://localhost:20000/tracker
+- **WebSocket**: ws://localhost:20000/ws
+- **MCP Server**: Use `npm run mcp` (separate process)
+
+## Detailed Installation
+
+### 1. Install Node.js Dependencies
 
 ```bash
-mkdir -p ~/.martha/service
-mkdir -p ~/.martha/logs
-mkdir -p ~/.martha/tunnels
+# Install backend dependencies
+npm install
+
+# Install dashboard dependencies
+cd dashboard
+npm install
+cd ..
 ```
 
-### 4. Configure Service
+### 2. Set Up PostgreSQL Database
+
+**Option A: Using Docker Compose**
 
 ```bash
-# Copy service configuration template
-cp config/.env.template ~/.martha/service/.env
+# Start PostgreSQL and Redis
+docker-compose up -d postgres redis
+```
+
+**Option B: Local PostgreSQL**
+
+```bash
+# Create database
+createdb martha_dev
+
+# Create database user (if needed)
+psql -c "CREATE USER martha WITH PASSWORD 'your_password';"
+psql -c "GRANT ALL PRIVILEGES ON DATABASE martha_dev TO martha;"
+```
+
+### 3. Configure Environment
+
+```bash
+# Copy template
+cp .env.local.template .env.local
 
 # Edit configuration
-nano ~/.martha/service/.env
+nano .env.local
 ```
 
 **Required settings:**
 ```bash
-SERVICE_PORT=9000
-REDIS_URL=redis://:your_password@localhost:6379
-```
+# Service Configuration
+PORT=20000
+NODE_ENV=development
 
-**Optional settings:**
-```bash
-# For GitHub integration
+# Database
+DATABASE_URL=postgresql://martha:password@localhost:5432/martha_dev
+
+# Tracker
+MARTHA_DIR=/path/to/.martha
+TRACKER_SYNC_ENABLED=true
+
+# Optional: GitHub Integration
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
+GITHUB_OWNER=your-org
+GITHUB_REPO=your-repo
 
-# For Cloudflare tunnels
+# Optional: Cloudflare Tunnels
 CLOUDFLARE_API_TOKEN=xxxxxxxxxxxxx
-CLOUDFLARE_ZONE_ID=xxxxxxxxxxxxx
 CLOUDFLARE_ACCOUNT_ID=xxxxxxxxxxxxx
-CLOUDFLARE_DOMAIN=arch.ie
+CLOUDFLARE_ZONE_ID=xxxxxxxxxxxxx
+CLOUDFLARE_DOMAIN=example.com
 ```
 
-### 5. Create Registry
+### 4. Initialize Database
 
 ```bash
-# Copy registry template
-cp config/registry.template.json ~/.martha/registry.json
+# Run database setup script
+npm run db:setup
 
-# Edit with your worktrees
-nano ~/.martha/registry.json
+# Or manually run schema
+psql martha_dev < src/database/schema.sql
+
+# Optional: Seed development data
+npm run db:seed
 ```
 
-**Example entry:**
+### 5. Build and Start
+
+```bash
+# Build TypeScript service
+npm run build
+
+# Build React dashboard
+cd dashboard && npm run build && cd ..
+
+# Start the service
+npm start
+```
+
+### 6. Verify Installation
+
+```bash
+# Check health endpoint
+curl http://localhost:20000/api/health
+
+# Expected response:
+# {
+#   "status": "healthy",
+#   "version": "3.0.0",
+#   "uptime": 123.456,
+#   "database": "connected",
+#   "redis": "connected"
+# }
+
+# Open dashboard in browser
+open http://localhost:20000
+
+# Test tracker
+open http://localhost:20000/tracker
+
+# Check WebSocket connection
+wscat -c ws://localhost:20000/ws
+```
+
+## Development Mode
+
+For active development with hot-reload:
+
+```bash
+# Terminal 1: Run backend with watch mode
+npm run dev
+
+# Terminal 2: Run dashboard dev server
+cd dashboard && npm run dev
+```
+
+The dashboard dev server runs on port 21004 with proxying to the backend on port 20000.
+
+## MCP Server Setup
+
+The Model Context Protocol server allows Claude Code to interact with Martha:
+
+```bash
+# Start MCP server (separate terminal)
+npm run mcp
+
+# Or build and run compiled version
+npm run mcp:build
+npm run mcp:start
+```
+
+Add to your Claude Code configuration:
 ```json
 {
-  "name": "my-worktree",
-  "index": 5,
-  "branch": "feature-branch",
-  "path": "/path/to/worktree",
-  "ports": {
-    "postgres": 5000,
-    "redis": 5001,
-    "api": 5002,
-    "pgadmin": 5003,
-    "frontend": 5004
-  },
-  "containers": {
-    "postgres": "archie-my-worktree-postgres",
-    "redis": "archie-my-worktree-redis",
-    "api": "archie-my-worktree-api",
-    "pgadmin": "archie-my-worktree-pgadmin"
-  },
-  "network": "archie-my-worktree-network",
-  "volumes": {
-    "postgres": "archie-my-worktree-postgres-data",
-    "redis": "archie-my-worktree-redis-data",
-    "file_uploads": "archie-my-worktree-file-uploads"
-  },
-  "database": {
-    "name": "archie_my_worktree_dev",
-    "url": "postgresql://user:pass@localhost:5000/archie_my_worktree_dev"
-  },
-  "enabled": true
-}
-```
-
-### 6. Configure Docker Group Access
-
-The monitoring agents need access to Docker socket:
-
-```bash
-# Add your user to docker group
-sudo usermod -aG docker $USER
-
-# Log out and back in, or use:
-newgrp docker
-
-# Verify access
-docker ps
-```
-
-### 7. Start Redis (if not already running)
-
-```bash
-# Using Docker
-docker run -d \
-  --name martha-redis \
-  -p 6379:6379 \
-  redis:alpine redis-server --requirepass your_password
-
-# Or use system Redis
-sudo systemctl start redis
-```
-
-### 8. Start Monitoring Service
-
-```bash
-cd service
-python service.py
-```
-
-You should see:
-```
-[2026-01-11 18:00:00] INFO: 🚀 Worktree Monitoring Service starting...
-[2026-01-11 18:00:00] INFO: Version: 2.0.0
-[2026-01-11 18:00:00] INFO: Port: 9000
-[2026-01-11 18:00:00] INFO: ✅ Connected to Redis
-INFO:     Uvicorn running on http://0.0.0.0:9000
-```
-
-Verify: `curl http://localhost:9000/health`
-
-### 9. Configure Worktrees
-
-For each worktree you want to monitor:
-
-```bash
-# Copy agent script
-cp agent/worktree_agent.py /path/to/worktree/
-
-# Copy and customize .env.local
-cp config/.env.worktree.example /path/to/worktree/.env.local
-
-# Edit with correct INDEX and ports
-nano /path/to/worktree/.env.local
-```
-
-**Example .env.local for index 5:**
-```bash
-WORKTREE_INDEX=5
-WORKTREE_NAME=my-worktree
-COMPOSE_PROJECT_NAME=archie-my-worktree
-
-POSTGRES_PORT=5000
-REDIS_PORT=5001
-API_PORT=5002
-PGADMIN_PORT=5003
-FRONTEND_PORT=5004
-
-DATABASE_URL=postgresql://user:pass@localhost:5000/dbname
-REDIS_URL=redis://:pass@localhost:5001
-```
-
-### 10. Update Docker Compose Files
-
-Your `docker-compose.yml` must support environment variable ports:
-
-```yaml
-services:
-  postgres:
-    image: postgres:15-alpine
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    container_name: ${COMPOSE_PROJECT_NAME:-archie}-postgres
-    networks:
-      - ${COMPOSE_PROJECT_NAME:-archie}-network
-    volumes:
-      - ${COMPOSE_PROJECT_NAME:-archie}-postgres-data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    container_name: ${COMPOSE_PROJECT_NAME:-archie}-redis
-    networks:
-      - ${COMPOSE_PROJECT_NAME:-archie}-network
-    volumes:
-      - ${COMPOSE_PROJECT_NAME:-archie}-redis-data:/data
-
-networks:
-  default:
-    name: ${COMPOSE_PROJECT_NAME:-archie}-network
-
-volumes:
-  postgres-data:
-    name: ${COMPOSE_PROJECT_NAME:-archie}-postgres-data
-  redis-data:
-    name: ${COMPOSE_PROJECT_NAME:-archie}-redis-data
-```
-
-### 11. Start Worktree Agents
-
-```bash
-# Start all agents at once
-./scripts/start-worktree-agents.sh
-
-# Or start individually
-./scripts/start-single-agent.sh my-worktree /path/to/worktree ~/.martha/logs/my-worktree.log
-```
-
-### 12. Verify Everything is Running
-
-```bash
-# Check service health
-curl http://localhost:9000/health
-
-# List connected worktrees
-curl http://localhost:9000/api/v1/worktrees
-
-# Check agent logs
-tail -f ~/.martha/logs/worktree-agents-my-worktree.log
-```
-
-Expected output for connected worktree:
-```json
-{
-  "name": "my-worktree",
-  "status": "online",
-  "last_seen": "2026-01-11T18:00:00",
-  "health": {
-    "docker": "healthy",
-    "postgres": "healthy",
-    "redis": "healthy",
-    "api": "healthy"
+  "mcpServers": {
+    "martha": {
+      "command": "node",
+      "args": ["/path/to/martha.dev-v4/dist/mcp/server.js"],
+      "disabled": false
+    }
   }
 }
 ```
 
-## Post-Installation
+## Production Deployment
 
-### Provision Cloudflare Tunnels (Optional)
-
-```bash
-# Via CLI
-cd service
-python cli_client.py provision-tunnel my-worktree
-
-# Or via API
-curl -X POST http://localhost:9000/api/v1/worktrees/my-worktree/tunnels/provision
-```
-
-### Start Worktree Docker Containers
+### Using PM2
 
 ```bash
-cd /path/to/worktree
-docker-compose up -d
+# Install PM2
+npm install -g pm2
+
+# Start service with PM2
+pm2 start npm --name "martha-service" -- start
+
+# Enable auto-restart on reboot
+pm2 startup
+pm2 save
 ```
 
-The agent will automatically detect the containers and start monitoring.
+### Using systemd
 
-### Validate Configuration
-
-```bash
-# Run validation script
-python scripts/validate-worktree-config.py /path/to/worktree
-
-# Verify git safety
-./scripts/verify-git-safety.sh
-```
-
-## Running as System Service (Optional)
-
-### Systemd Service
-
-Create `/etc/systemd/system/martha-service.service`:
+Create `/etc/systemd/system/martha.service`:
 
 ```ini
 [Unit]
-Description=Martha.dev Worktree Monitoring Service
-After=network.target redis.service docker.service
+Description=Martha.dev v4 Service
+After=network.target postgresql.service redis.service
 
 [Service]
 Type=simple
 User=youruser
-WorkingDirectory=/home/youruser/martha.dev-v4/service
-ExecStart=/home/youruser/martha.dev-v4/venv/bin/python service.py
+WorkingDirectory=/path/to/martha.dev-v4
+ExecStart=/usr/bin/node /path/to/martha.dev-v4/dist/src/index.js
 Restart=always
 RestartSec=10
-Environment="PYTHONUNBUFFERED=1"
+Environment="NODE_ENV=production"
+Environment="PORT=20000"
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Enable and start:
 ```bash
+# Enable and start service
 sudo systemctl daemon-reload
-sudo systemctl enable martha-service
-sudo systemctl start martha-service
-sudo systemctl status martha-service
+sudo systemctl enable martha
+sudo systemctl start martha
+
+# Check status
+sudo systemctl status martha
+
+# View logs
+sudo journalctl -u martha -f
 ```
 
-### Agent Systemd Services
+### Using Docker
 
-For each worktree, create `/etc/systemd/system/martha-agent-{name}.service`:
+```bash
+# Build Docker image
+docker build -t martha-dev-v4:latest .
 
-```ini
-[Unit]
-Description=Martha.dev Agent - {worktree-name}
-After=network.target docker.service martha-service.service
-
-[Service]
-Type=simple
-User=youruser
-WorkingDirectory=/path/to/worktree
-ExecStart=/home/youruser/martha.dev-v4/scripts/start-single-agent.sh {name} /path/to/worktree /var/log/martha/{name}.log
-Restart=always
-RestartSec=10
-Environment="PYTHONUNBUFFERED=1"
-
-[Install]
-WantedBy=multi-user.target
+# Run container
+docker run -d \
+  --name martha-service \
+  -p 20000:20000 \
+  -v $(pwd)/.env.local:/app/.env.local \
+  -v /path/to/.martha:/mnt/data/martha-workflow/.martha \
+  --restart unless-stopped \
+  martha-dev-v4:latest
 ```
 
-## Troubleshooting Installation
+## Cloudflare Tunnel Setup
+
+For remote access via Cloudflare Tunnel:
+
+```bash
+# Install cloudflared
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
+sudo chmod +x /usr/local/bin/cloudflared
+
+# Authenticate
+cloudflared tunnel login
+
+# Create tunnel
+cloudflared tunnel create martha
+
+# Add tunnel configuration
+cat > ~/.cloudflared/config.yml <<EOF
+tunnel: martha
+credentials-file: /home/youruser/.cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: martha.example.com
+    service: http://localhost:20000
+  - service: http_status:404
+EOF
+
+# Start tunnel
+cloudflared tunnel run martha
+```
+
+Or use systemd service for automatic startup.
+
+## Worktree Registry Setup
+
+Create worktree registry at `~/.martha/registry.json`:
+
+```json
+{
+  "worktrees": [
+    {
+      "name": "my-feature",
+      "path": "/path/to/worktree",
+      "branch": "feature/new-feature",
+      "status": "active",
+      "metadata": {
+        "created_at": "2026-01-15T00:00:00Z",
+        "owner": "username"
+      }
+    }
+  ]
+}
+```
+
+Or manage via API:
+
+```bash
+# Add worktree
+curl -X POST http://localhost:20000/api/worktrees \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-feature",
+    "path": "/path/to/worktree",
+    "branch": "feature/new-feature"
+  }'
+```
+
+## Troubleshooting
 
 ### Service Won't Start
 
-**Redis connection failed:**
-```bash
-# Check Redis is running
-redis-cli -a your_password ping
+1. **Check logs:**
+   ```bash
+   # If using npm start
+   tail -f ~/.martha/logs/app.log
 
-# Verify Redis URL in .env
-cat ~/.martha/service/.env | grep REDIS_URL
+   # If using PM2
+   pm2 logs martha-service
+
+   # If using systemd
+   sudo journalctl -u martha -f
+   ```
+
+2. **Check port availability:**
+   ```bash
+   lsof -i :20000
+   ```
+
+3. **Verify database connection:**
+   ```bash
+   psql $DATABASE_URL -c "SELECT version();"
+   ```
+
+### Database Connection Failed
+
+```bash
+# Check PostgreSQL is running
+systemctl status postgresql
+# or
+docker ps | grep postgres
+
+# Test connection
+psql martha_dev -c "SELECT 1;"
+
+# Verify DATABASE_URL in .env.local
+cat .env.local | grep DATABASE_URL
 ```
 
-**Port 9000 already in use:**
-```bash
-# Find what's using the port
-lsof -i :9000
+### Dashboard Not Loading
 
-# Kill the process or change SERVICE_PORT in .env
+```bash
+# Rebuild dashboard
+cd dashboard && npm run build && cd ..
+
+# Verify build output exists
+ls -la dashboard/dist/
+
+# Check service logs for static file errors
+tail -f ~/.martha/logs/app.log | grep "dashboard"
 ```
 
-### Agent Won't Connect
+### Tracker Issues Not Loading
 
-**WebSocket connection refused:**
-- Ensure service is running: `curl http://localhost:9000/health`
-- Check firewall allows port 9000
-- Verify MONITOR_SERVICE_URL in agent environment
-
-**Docker permission denied:**
 ```bash
-# Verify Docker group membership
-groups | grep docker
+# Verify .martha directory exists
+ls -la /path/to/.martha/
 
-# Add to group if needed
-sudo usermod -aG docker $USER
-newgrp docker
+# Check issues directory
+ls -la /path/to/.martha/issues/
+
+# Test tracker API
+curl http://localhost:20000/api/tracker/issues
+
+# Check MARTHA_DIR in .env.local
+cat .env.local | grep MARTHA_DIR
 ```
 
-### Port Conflicts
+### WebSocket Connection Failed
 
-**Port already in use:**
 ```bash
-# Find what's using the port
-lsof -i :5000
+# Test WebSocket with wscat
+npm install -g wscat
+wscat -c ws://localhost:20000/ws
 
-# Update INDEX in .env.local to use different range
-# Example: INDEX=8 → ports 8000-8004
+# Check firewall rules
+sudo ufw status | grep 20000
 ```
 
-**Docker container name conflicts:**
-- Ensure COMPOSE_PROJECT_NAME is unique per worktree
-- Check no containers with same names: `docker ps -a | grep archie-`
+## Upgrading
 
-## Next Steps
+```bash
+# Pull latest changes
+git pull origin main
 
-- Read [Main Branch Strategy](main-branch-strategy.md) for production setup
-- Review [Architecture](../service/ARCHITECTURE.md) for system design
-- Explore [API Documentation](API.md) for integration options
-- Set up monitoring dashboards (Grafana, etc.)
+# Install new dependencies
+npm install
+cd dashboard && npm install && cd ..
+
+# Run database migrations (if any)
+npm run db:migrate
+
+# Rebuild
+npm run build
+cd dashboard && npm run build && cd ..
+
+# Restart service
+pm2 restart martha-service
+# or
+sudo systemctl restart martha
+```
 
 ## Support
 
-If you encounter issues during installation:
-1. Check logs: `~/.martha/logs/` and `service/service.log`
-2. Validate configuration: `python scripts/validate-worktree-config.py`
-3. Review troubleshooting section in main [README](../README.md)
-4. Open an issue on GitHub with logs and configuration
+For issues during installation:
+1. Check logs at `~/.martha/logs/`
+2. Review [ARCHITECTURE.md](./ARCHITECTURE.md) for system design
+3. Open an issue on GitHub with:
+   - Installation log output
+   - Environment details (OS, Node version, PostgreSQL version)
+   - Configuration (redact sensitive values)
+
+## Next Steps
+
+After installation:
+- Read [README.md](../README.md) for usage guide
+- Configure [Cloudflare Tunnels](./PORT_ALLOCATION.md) for remote access
+- Set up [MCP Server](../src/mcp/README.md) for Claude Code integration
+- Explore [Tracker](./docs/TRACKER.md) for issue management

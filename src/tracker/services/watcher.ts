@@ -7,8 +7,10 @@ import chokidar, { FSWatcher } from 'chokidar';
 import * as path from 'node:path';
 import { getTrackerPath } from './file-storage.js';
 import { connectionManager } from '../../core/connection-manager.js';
-import { logger } from '../../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 import type { TrackerEvent } from '../types.js';
+
+const logger = createLogger({ module: 'tracker-watcher' });
 
 export class TrackerWatcher {
   private watcher: FSWatcher | null = null;

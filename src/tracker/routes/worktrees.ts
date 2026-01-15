@@ -4,7 +4,9 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
-import { worktreeRepository } from '../../database/repositories/worktree-repository.js';
+import { getWorktreeRepository } from '../../database/repositories/worktree-repository.js';
+
+const worktreeRepository = getWorktreeRepository();
 
 /**
  * Fastify plugin for tracker worktrees routes

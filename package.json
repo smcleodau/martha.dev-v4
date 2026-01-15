@@ -26,6 +26,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed-dev-data.ts",
     "validate": "tsx scripts/validate-phase1.ts",
+    "tracker:migrate": "tsx scripts/migrate-to-multi-board.ts",
+    "tracker:migrate:dry-run": "tsx scripts/migrate-to-multi-board.ts --dry-run",
     "agent": "tsx src/agents/index.ts",
     "agent:build": "swc src/agents -d dist/agents --copy-files",
     "agent:start": "node dist/agents/index.js",

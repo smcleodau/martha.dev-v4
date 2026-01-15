@@ -37,8 +37,16 @@ export interface IssueMetadata {
   version: number;
 }
 
+export interface DocumentationLinks {
+  overview: string | null;
+  technical_spec: string | null;
+  related_docs: string[];
+}
+
 export interface Issue {
   id: string;
+  worktree_id: string;                    // NEW: Which worktree owns this issue
+  board_id: string;                       // NEW: Which board it's on
   type: "epic" | "story" | "task" | "bug";
   title: string;
   description: string;
@@ -50,6 +58,7 @@ export interface Issue {
   quality: QualityInfo;
   time_tracking: TimeTracking;
   links: Links;
+  documentation: DocumentationLinks;      // NEW: Links to documentation
   github_sync: GitHubSync;
   metadata: IssueMetadata;
 }
@@ -61,11 +70,13 @@ export interface IndexEntry {
   status: string;
   priority: string;
   parent_id: string | null;
+  board_id: string;                       // NEW: Board this issue belongs to
   updated_at: string;
 }
 
 export interface IssueIndex {
   $schema: string;
+  worktree_id: string;                    // NEW: Which worktree this index belongs to
   version: number;
   count: number;
   next_id: number;
@@ -73,6 +84,8 @@ export interface IssueIndex {
   by_status: Record<string, string[]>;
   by_parent: Record<string, string[]>;
   by_type: Record<string, string[]>;
+  by_board: Record<string, string[]>;     // NEW: Issues grouped by board
+  updated_at: string;
 }
 
 export interface BoardColumn {
@@ -85,14 +98,19 @@ export interface BoardColumn {
 
 export interface BoardState {
   $schema: string;
+  id: string;                             // NEW: Board identifier
+  worktree_id: string;                    // NEW: Which worktree owns this board
+  name: string;                           // NEW: Display name
+  description: string;                    // NEW: Board description
   version: number;
   sprint: {
     id: string;
     name: string;
     start_date: string;
     end_date: string;
-  };
+  } | null;                               // Allow null sprint
   columns: BoardColumn[];
+  created_at: string;                     // NEW: Creation timestamp
   updated_at: string;
 }
 
@@ -123,6 +141,43 @@ export interface Config {
     owner: string;
     repo: string;
     default_labels: string[];
+  };
+}
+
+// Worktree Configuration
+export interface WorktreeConfig {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  path: string;                            // File system path
+  github_repo?: string;
+  boards: string[];                        // Board IDs in this worktree
+  created_at: string;
+  updated_at: string;
+}
+
+// Documentation
+export interface Documentation {
+  id: string;
+  worktree_id: string;
+  issue_id?: string;                       // Optional: issue-specific doc
+  epic_id?: string;                        // Optional: epic-specific doc
+  board_id?: string;                       // Optional: board-specific doc
+  type: 'overview' | 'technical_spec' | 'api_reference' | 'guide' | 'troubleshooting';
+  title: string;
+  content: string;                         // Markdown content
+  tags: string[];
+  links: {
+    related_issues: string[];
+    related_docs: string[];
+    external_links: string[];
+  };
+  metadata: {
+    created_at: string;
+    updated_at: string;
+    author: string;
+    version: number;
   };
 }
 

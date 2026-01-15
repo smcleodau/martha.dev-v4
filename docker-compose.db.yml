@@ -22,9 +22,28 @@ services:
     networks:
       - martha-ts-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: martha-ts-redis
+    restart: unless-stopped
+    command: redis-server --requirepass password
+    ports:
+      - "20001:6379"
+    volumes:
+      - martha-ts-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - martha-ts-network
+
 volumes:
   martha-ts-postgres-data:
     name: martha-ts-postgres-data
+  martha-ts-redis-data:
+    name: martha-ts-redis-data
 
 networks:
   martha-ts-network:

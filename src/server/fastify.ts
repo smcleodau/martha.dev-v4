@@ -100,7 +100,7 @@ export async function createServer() {
   await server.register(docsRoutes); // Documentation API
 
   // Register static file serving for React dashboard (after all API routes)
-  const dashboardDistPath = join(__dirname, '../../../dashboard/dist');
+  const dashboardDistPath = join(__dirname, '../../dashboard/dist');
   serverLogger.info('Registering static files', { path: dashboardDistPath });
 
   try {

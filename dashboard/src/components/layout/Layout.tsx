@@ -15,6 +15,7 @@ const Layout = ({ children }: LayoutProps) => {
 
   const navItems = [
     { path: '/', label: 'Overview', icon: '📊' },
+    { path: '/tracker', label: 'Tracker', icon: '📝' },
     { path: '/logs', label: 'Logs', icon: '📋' },
     { path: '/docs', label: 'Documentation', icon: '📚' },
     { path: '/settings', label: 'Settings', icon: '⚙️' },
@@ -64,9 +65,12 @@ const Layout = ({ children }: LayoutProps) => {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto p-8">
-          {children}
-        </div>
+        {/* Full-height pages like tracker don't need max-w or padding */}
+        {location.pathname === '/tracker' ? (
+          <div className="h-full">{children}</div>
+        ) : (
+          <div className="max-w-7xl mx-auto p-8">{children}</div>
+        )}
       </main>
     </div>
   );

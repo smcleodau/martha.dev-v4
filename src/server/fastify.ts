@@ -21,6 +21,14 @@ import { registerSwarmRoutes } from './routes/swarms.js';
 import { testRoutes } from './routes/tests.js';
 import { docsRoutes } from './routes/docs.js';
 
+// Tracker routes
+import { issuesRoutes } from '../tracker/routes/issues.js';
+import { boardRoutes } from '../tracker/routes/board.js';
+import { commentsRoutes } from '../tracker/routes/comments.js';
+import { agentsRoutes } from '../tracker/routes/agents.js';
+import { authRoutes } from '../tracker/routes/auth.js';
+import { worktreesRoutes as trackerWorktreesRoutes } from '../tracker/routes/worktrees.js';
+
 const serverLogger = createLogger({ module: 'fastify' });
 
 /**
@@ -98,6 +106,15 @@ export async function createServer() {
   await server.register(testRoutes);
   await server.register(dashboardRoutes); // Changelog API
   await server.register(docsRoutes); // Documentation API
+
+  // Register tracker routes
+  await server.register(authRoutes, { prefix: '/api/tracker/auth' });
+  await server.register(issuesRoutes, { prefix: '/api/tracker/issues' });
+  await server.register(boardRoutes, { prefix: '/api/tracker/board' });
+  await server.register(commentsRoutes, { prefix: '/api/tracker' });
+  await server.register(agentsRoutes, { prefix: '/api/tracker/agents' });
+  await server.register(trackerWorktreesRoutes, { prefix: '/api/tracker/worktrees' });
+  serverLogger.info('Tracker routes registered');
 
   // Register static file serving for React dashboard (after all API routes)
   const dashboardDistPath = join(__dirname, '../../dashboard/dist');

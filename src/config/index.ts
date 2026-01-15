@@ -60,6 +60,20 @@ const configSchema = z.object({
 
   // Metrics
   metricsDir: z.string().default('~/.martha/metrics'),
+
+  // Tracker
+  tracker: z
+    .object({
+      marthaDir: z.string().default('/mnt/data/martha-workflow/.martha'),
+      enableSync: z.coerce.boolean().default(true),
+      githubOwner: z.string().optional(),
+      githubRepo: z.string().optional(),
+    })
+    .optional()
+    .default({
+      marthaDir: '/mnt/data/martha-workflow/.martha',
+      enableSync: true,
+    }),
 });
 
 /**
@@ -106,6 +120,13 @@ function loadConfig() {
       logPretty: process.env.LOG_PRETTY,
 
       metricsDir: process.env.METRICS_DIR,
+
+      tracker: {
+        marthaDir: process.env.MARTHA_DIR || '/mnt/data/martha-workflow/.martha',
+        enableSync: process.env.TRACKER_SYNC_ENABLED !== 'false',
+        githubOwner: process.env.GITHUB_OWNER,
+        githubRepo: process.env.GITHUB_REPO,
+      },
     };
 
     const validated = configSchema.parse(rawConfig);

@@ -52,6 +52,7 @@
     "@octokit/graphql": "^7.0.2",
     "@octokit/rest": "^20.0.2",
     "axios": "^1.6.5",
+    "chokidar": "^3.6.0",
     "dockerode": "^4.0.2",
     "dotenv": "^16.4.1",
     "fastify": "^4.26.0",

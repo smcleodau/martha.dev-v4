@@ -12,6 +12,7 @@ import { appConfig } from './config/index.js';
 import { startServer } from './server/fastify.js';
 import { closePool } from './database/client.js';
 import { closeRedis } from './redis/client.js';
+import { trackerWatcher } from './tracker/services/watcher.js';
 
 async function main() {
   try {
@@ -24,6 +25,12 @@ async function main() {
 
     // Start Fastify server
     await startServer();
+
+    // Start tracker file watcher (if tracker is enabled)
+    if (appConfig.tracker.marthaDir) {
+      await trackerWatcher.start();
+      logger.info('Tracker watcher started');
+    }
 
   } catch (error) {
     logger.error('Fatal error during startup', {
@@ -39,6 +46,7 @@ async function shutdown() {
   logger.info('Received shutdown signal, cleaning up...');
 
   try {
+    await trackerWatcher.stop();
     await closePool();
     await closeRedis();
     logger.info('Cleanup complete');

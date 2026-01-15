@@ -122,9 +122,11 @@ export function TrackerPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Issue Tracker</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Sprint: {board.sprint.name} ({new Date(board.sprint.start_date).toLocaleDateString()} - {new Date(board.sprint.end_date).toLocaleDateString()})
-            </p>
+            {board.sprint && (
+              <p className="text-sm text-gray-600 mt-1">
+                Sprint: {board.sprint.name} ({new Date(board.sprint.start_date).toLocaleDateString()} - {new Date(board.sprint.end_date).toLocaleDateString()})
+              </p>
+            )}
           </div>
           <div className="flex items-center space-x-3">
             <button
@@ -216,7 +218,7 @@ export function TrackerPage() {
                         >
                           {issue.priority}
                         </span>
-                        {issue.assignee && (
+                        {issue.assignee && issue.assignee.name && (
                           <span className="flex items-center space-x-1">
                             <span className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs">
                               {issue.assignee.name.charAt(0)}
@@ -282,13 +284,19 @@ export function TrackerPage() {
               <div>
                 <label className="text-sm font-medium text-gray-700">Created</label>
                 <p className="text-sm text-gray-600">
-                  {new Date(issues[selectedIssue].metadata.created_at).toLocaleString()}
+                  {new Date(
+                    issues[selectedIssue].metadata?.created_at ||
+                    (issues[selectedIssue] as any).created_at
+                  ).toLocaleString()}
                 </p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Updated</label>
                 <p className="text-sm text-gray-600">
-                  {new Date(issues[selectedIssue].metadata.updated_at).toLocaleString()}
+                  {new Date(
+                    issues[selectedIssue].metadata?.updated_at ||
+                    (issues[selectedIssue] as any).updated_at
+                  ).toLocaleString()}
                 </p>
               </div>
             </div>

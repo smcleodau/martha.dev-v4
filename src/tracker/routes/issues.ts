@@ -236,10 +236,12 @@ function listIssues(filters?: {
   }
 
   // Sort by updated_at descending
-  return issues.sort(
-    (a, b) =>
-      new Date(b.metadata.updated_at).getTime() - new Date(a.metadata.updated_at).getTime()
-  );
+  // Handle both old Python format (updated_at at top level) and new TS format (metadata.updated_at)
+  return issues.sort((a, b) => {
+    const aUpdated = (a.metadata?.updated_at || (a as any).updated_at) as string;
+    const bUpdated = (b.metadata?.updated_at || (b as any).updated_at) as string;
+    return new Date(bUpdated).getTime() - new Date(aUpdated).getTime();
+  });
 }
 
 /**

@@ -118,3 +118,35 @@ export function getTrackerRoot(): string {
 export function getTrackerPath(...segments: string[]): string {
   return path.join(getTrackerRoot(), ...segments);
 }
+
+/**
+ * Get worktree directory path
+ * @param worktreeId Worktree identifier
+ * @param segments Additional path segments
+ * @returns Absolute path to worktree directory
+ */
+export function getWorktreePath(worktreeId: string, ...segments: string[]): string {
+  return getTrackerPath('worktrees', worktreeId, ...segments);
+}
+
+/**
+ * Get board directory path
+ * @param worktreeId Worktree identifier
+ * @param boardId Board identifier
+ * @param segments Additional path segments
+ * @returns Absolute path to board directory
+ */
+export function getBoardPath(worktreeId: string, boardId: string, ...segments: string[]): string {
+  return getWorktreePath(worktreeId, 'boards', boardId, ...segments);
+}
+
+/**
+ * Get issue file path
+ * @param worktreeId Worktree identifier
+ * @param boardId Board identifier
+ * @param issueId Issue identifier
+ * @returns Absolute path to issue JSON file
+ */
+export function getIssuePath(worktreeId: string, boardId: string, issueId: string): string {
+  return getBoardPath(worktreeId, boardId, 'issues', `${issueId}.json`);
+}

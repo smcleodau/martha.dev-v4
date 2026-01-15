@@ -29,8 +29,15 @@ export class TrackerWatcher {
 
     logger.info(`Starting TrackerWatcher on ${trackerRoot}`);
 
+    // Watch new multi-board worktree structure
     this.watcher = chokidar.watch(
       [
+        path.join(trackerRoot, 'worktrees/*/boards/*/issues/**/*.json'),
+        path.join(trackerRoot, 'worktrees/*/boards/*/state.json'),
+        path.join(trackerRoot, 'worktrees/*/comments/**/*.json'),
+        path.join(trackerRoot, 'worktrees/*/agents/sessions/**/*.json'),
+        path.join(trackerRoot, 'worktrees/*/index.json'),
+        // Keep watching old structure for backward compatibility during migration
         path.join(trackerRoot, 'issues/**/*.{json,md}'),
         path.join(trackerRoot, 'board/state.json'),
         path.join(trackerRoot, 'comments/**/*.json'),
@@ -110,15 +117,16 @@ export class TrackerWatcher {
     action: 'change' | 'add' | 'delete'
   ): TrackerEvent | null {
     const relativePath = path.relative(getTrackerPath(), filePath);
+    const parts = relativePath.split(path.sep);
 
-    // Issue files
-    if (relativePath.startsWith('issues/') && !relativePath.includes('index.json')) {
-      const issueId = path.basename(filePath, path.extname(filePath));
+    // New multi-board structure: worktrees/{worktreeId}/boards/{boardId}/issues/{issueId}.json
+    if (parts[0] === 'worktrees' && parts.length >= 5 && parts[2] === 'boards' && parts[4] === 'issues') {
+      const issueId = path.basename(filePath, '.json');
 
       if (action === 'add') {
         return {
           type: 'tracker:issue_created',
-          data: { issue_id: issueId, issue: {} as any }, // Will be populated by handler
+          data: { issue_id: issueId, issue: {} as any },
         };
       } else if (action === 'change') {
         return {
@@ -133,7 +141,65 @@ export class TrackerWatcher {
       }
     }
 
-    // Board state
+    // New multi-board structure: worktrees/{worktreeId}/boards/{boardId}/state.json
+    if (parts[0] === 'worktrees' && parts.length >= 5 && parts[2] === 'boards' && parts[4] === 'state.json') {
+      return {
+        type: 'tracker:board_updated',
+        data: { path: relativePath },
+      };
+    }
+
+    // New multi-board structure: worktrees/{worktreeId}/comments/{issueId}/{commentId}.json
+    if (parts[0] === 'worktrees' && parts.length >= 4 && parts[2] === 'comments') {
+      const issueId = parts[3];
+      return {
+        type: 'tracker:comment_added',
+        data: { issue_id: issueId, comment: {} as any },
+      };
+    }
+
+    // New multi-board structure: worktrees/{worktreeId}/agents/sessions/{sessionId}.json
+    if (parts[0] === 'worktrees' && parts.length >= 5 && parts[2] === 'agents' && parts[3] === 'sessions') {
+      const sessionId = path.basename(filePath, '.json');
+
+      if (action === 'add') {
+        return {
+          type: 'tracker:agent_started',
+          data: { session_id: sessionId, session: {} as any },
+        };
+      } else if (action === 'change') {
+        return {
+          type: 'tracker:agent_progress',
+          data: { session_id: sessionId, progress: 0 },
+        };
+      }
+    }
+
+    // === BACKWARD COMPATIBILITY: Old single-board structure ===
+
+    // Old structure: issues/{issueId}.json
+    if (relativePath.startsWith('issues/') && !relativePath.includes('index.json')) {
+      const issueId = path.basename(filePath, path.extname(filePath));
+
+      if (action === 'add') {
+        return {
+          type: 'tracker:issue_created',
+          data: { issue_id: issueId, issue: {} as any },
+        };
+      } else if (action === 'change') {
+        return {
+          type: 'tracker:issue_updated',
+          data: { issue_id: issueId, issue: {} as any },
+        };
+      } else if (action === 'delete') {
+        return {
+          type: 'tracker:issue_deleted',
+          data: { issue_id: issueId },
+        };
+      }
+    }
+
+    // Old structure: board/state.json
     if (relativePath === 'board/state.json') {
       return {
         type: 'tracker:board_updated',
@@ -141,11 +207,11 @@ export class TrackerWatcher {
       };
     }
 
-    // Comments
+    // Old structure: comments/{issueId}/{commentId}.json
     if (relativePath.startsWith('comments/')) {
-      const parts = relativePath.split(path.sep);
-      if (parts.length >= 3) {
-        const issueId = parts[1];
+      const commentParts = relativePath.split(path.sep);
+      if (commentParts.length >= 3) {
+        const issueId = commentParts[1];
         return {
           type: 'tracker:comment_added',
           data: { issue_id: issueId, comment: {} as any },
@@ -153,7 +219,7 @@ export class TrackerWatcher {
       }
     }
 
-    // Agent sessions
+    // Old structure: agents/sessions/{sessionId}.json
     if (relativePath.startsWith('agents/sessions/') && !relativePath.includes('index.json')) {
       const sessionId = path.basename(filePath, '.json');
 

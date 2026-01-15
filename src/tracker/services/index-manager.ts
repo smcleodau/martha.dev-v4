@@ -1,30 +1,38 @@
 /**
  * Index Manager Service
- * Manages the issues index for fast lookups
+ * Manages the issues index for fast lookups with multi-board support
  * Extracted from martha-workflow/tracker/mcp-server/src/index.ts
  */
 
 import * as path from 'node:path';
-import { readJsonSync, writeJsonSync, getTrackerPath } from './file-storage.js';
+import { readJsonSync, writeJsonSync, getTrackerPath, getWorktreePath, fileExists } from './file-storage.js';
 import type { Issue, IssueIndex } from '../types.js';
-
-const INDEX_PATH = getTrackerPath('issues', 'index.json');
 
 /**
  * Load the issue index from disk
+ * @param worktreeId Worktree identifier
  * @returns Issue index
  */
-export function loadIndex(): IssueIndex {
-  return readJsonSync<IssueIndex>(INDEX_PATH);
+export function loadIndex(worktreeId: string): IssueIndex {
+  const indexPath = getWorktreePath(worktreeId, 'index.json');
+
+  if (!fileExists(indexPath)) {
+    throw new Error(`Index not found for worktree: ${worktreeId}`);
+  }
+
+  return readJsonSync<IssueIndex>(indexPath);
 }
 
 /**
  * Save the issue index to disk
+ * @param worktreeId Worktree identifier
  * @param index Issue index to save
  */
-export function saveIndex(index: IssueIndex): void {
+export function saveIndex(worktreeId: string, index: IssueIndex): void {
+  const indexPath = getWorktreePath(worktreeId, 'index.json');
   index.version = Date.now();
-  writeJsonSync(INDEX_PATH, index);
+  index.updated_at = new Date().toISOString();
+  writeJsonSync(indexPath, index);
 }
 
 /**
@@ -41,6 +49,7 @@ export function addToIndex(index: IssueIndex, issue: Issue): void {
     status: issue.status,
     priority: issue.priority,
     parent_id: issue.parent_id,
+    board_id: issue.board_id,  // NEW: Include board_id
     updated_at: issue.metadata.updated_at,
   };
 
@@ -68,6 +77,14 @@ export function addToIndex(index: IssueIndex, issue: Issue): void {
     if (!index.by_parent[issue.parent_id].includes(issue.id)) {
       index.by_parent[issue.parent_id].push(issue.id);
     }
+  }
+
+  // Add to by_board (NEW)
+  if (!index.by_board[issue.board_id]) {
+    index.by_board[issue.board_id] = [];
+  }
+  if (!index.by_board[issue.board_id].includes(issue.id)) {
+    index.by_board[issue.board_id].push(issue.id);
   }
 
   index.count = Object.keys(index.issues).length;
@@ -100,6 +117,13 @@ export function removeFromIndexArrays(index: IssueIndex, issue: Issue): void {
       const idx = parentArr.indexOf(issue.id);
       if (idx !== -1) parentArr.splice(idx, 1);
     }
+  }
+
+  // Remove from by_board (NEW)
+  const boardArr = index.by_board[issue.board_id];
+  if (boardArr) {
+    const idx = boardArr.indexOf(issue.id);
+    if (idx !== -1) boardArr.splice(idx, 1);
   }
 }
 
@@ -161,6 +185,16 @@ export function getIssuesByType(index: IssueIndex, type: string): string[] {
  */
 export function getChildIssues(index: IssueIndex, parentId: string): string[] {
   return index.by_parent[parentId] || [];
+}
+
+/**
+ * Get all issues on a board (NEW)
+ * @param index Issue index
+ * @param boardId Board ID to filter by
+ * @returns Array of issue IDs
+ */
+export function getIssuesByBoard(index: IssueIndex, boardId: string): string[] {
+  return index.by_board[boardId] || [];
 }
 
 /**

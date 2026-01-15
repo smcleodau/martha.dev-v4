@@ -1,30 +1,184 @@
 /**
  * Board Manager Service
- * Manages the Kanban board state
+ * Manages the Kanban board state with multi-board support
  * Extracted from martha-workflow/tracker/mcp-server/src/index.ts
  */
 
-import { readJsonSync, writeJsonSync, getTrackerPath } from './file-storage.js';
-import type { BoardState } from '../types.js';
-
-const BOARD_PATH = getTrackerPath('board', 'state.json');
+import {
+  readJsonSync,
+  writeJsonSync,
+  getBoardPath,
+  getWorktreePath,
+  fileExists,
+  ensureDir,
+  listFiles,
+  deleteFile,
+} from './file-storage.js';
+import type { BoardState, BoardColumn } from '../types.js';
+import { addBoardToWorktree, removeBoardFromWorktree } from './worktree-manager.js';
 
 /**
  * Load the board state from disk
+ * @param worktreeId Worktree identifier
+ * @param boardId Board identifier
  * @returns Board state
  */
-export function loadBoard(): BoardState {
-  return readJsonSync<BoardState>(BOARD_PATH);
+export function loadBoard(worktreeId: string, boardId: string): BoardState {
+  const boardPath = getBoardPath(worktreeId, boardId, 'state.json');
+
+  if (!fileExists(boardPath)) {
+    throw new Error(`Board not found: ${worktreeId}/${boardId}`);
+  }
+
+  return readJsonSync<BoardState>(boardPath);
 }
 
 /**
  * Save the board state to disk
+ * @param worktreeId Worktree identifier
+ * @param boardId Board identifier
  * @param board Board state to save
  */
-export function saveBoard(board: BoardState): void {
+export function saveBoard(worktreeId: string, boardId: string, board: BoardState): void {
+  const boardPath = getBoardPath(worktreeId, boardId, 'state.json');
   board.version = Date.now();
   board.updated_at = new Date().toISOString();
-  writeJsonSync(BOARD_PATH, board);
+  writeJsonSync(boardPath, board);
+}
+
+/**
+ * Create a new board
+ * @param worktreeId Worktree identifier
+ * @param data Board creation data
+ * @returns Created board state
+ */
+export function createBoard(
+  worktreeId: string,
+  data: {
+    id: string;
+    name: string;
+    description: string;
+    columns?: BoardColumn[];
+  }
+): BoardState {
+  const boardPath = getBoardPath(worktreeId, data.id, 'state.json');
+
+  if (fileExists(boardPath)) {
+    throw new Error(`Board already exists: ${worktreeId}/${data.id}`);
+  }
+
+  // Create board directory structure
+  ensureDir(getBoardPath(worktreeId, data.id, 'issues'));
+
+  // Default columns if not provided
+  const defaultColumns: BoardColumn[] = [
+    { id: 'backlog', name: 'Backlog', color: '#6B7280', wip_limit: null, issue_ids: [] },
+    { id: 'todo', name: 'To Do', color: '#3B82F6', wip_limit: null, issue_ids: [] },
+    { id: 'in_progress', name: 'In Progress', color: '#F59E0B', wip_limit: 3, issue_ids: [] },
+    { id: 'review', name: 'Review', color: '#8B5CF6', wip_limit: null, issue_ids: [] },
+    { id: 'done', name: 'Done', color: '#10B981', wip_limit: null, issue_ids: [] },
+  ];
+
+  const board: BoardState = {
+    $schema: 'https://martha.dev/schemas/tracker/board.json',
+    id: data.id,
+    worktree_id: worktreeId,
+    name: data.name,
+    description: data.description,
+    version: 1,
+    sprint: null,
+    columns: data.columns || defaultColumns,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  // Save board
+  saveBoard(worktreeId, data.id, board);
+
+  // Add board to worktree's board list
+  addBoardToWorktree(worktreeId, data.id);
+
+  return board;
+}
+
+/**
+ * List all boards in a worktree
+ * @param worktreeId Worktree identifier
+ * @returns Array of board states
+ */
+export function listBoards(worktreeId: string): BoardState[] {
+  const boardsDir = getWorktreePath(worktreeId, 'boards');
+
+  if (!fileExists(boardsDir)) {
+    return [];
+  }
+
+  const boardIds = listFiles(boardsDir).filter((name) => {
+    const statePath = getBoardPath(worktreeId, name, 'state.json');
+    return fileExists(statePath);
+  });
+
+  return boardIds.map((id) => loadBoard(worktreeId, id));
+}
+
+/**
+ * Delete a board
+ * @param worktreeId Worktree identifier
+ * @param boardId Board identifier
+ * @returns true if deleted, false if not found
+ */
+export function deleteBoard(worktreeId: string, boardId: string): boolean {
+  const boardPath = getBoardPath(worktreeId, boardId, 'state.json');
+
+  if (!fileExists(boardPath)) {
+    return false;
+  }
+
+  // Delete board state file
+  deleteFile(boardPath);
+
+  // Remove from worktree's board list
+  removeBoardFromWorktree(worktreeId, boardId);
+
+  // Note: We don't delete the entire board directory to avoid data loss
+  // The directory can be cleaned up manually if needed
+
+  return true;
+}
+
+/**
+ * Check if a board exists
+ * @param worktreeId Worktree identifier
+ * @param boardId Board identifier
+ * @returns true if board exists
+ */
+export function boardExists(worktreeId: string, boardId: string): boolean {
+  const boardPath = getBoardPath(worktreeId, boardId, 'state.json');
+  return fileExists(boardPath);
+}
+
+/**
+ * Update board metadata
+ * @param worktreeId Worktree identifier
+ * @param boardId Board identifier
+ * @param updates Partial board state updates
+ * @returns Updated board state
+ */
+export function updateBoard(
+  worktreeId: string,
+  boardId: string,
+  updates: Partial<Pick<BoardState, 'name' | 'description' | 'sprint' | 'columns'>>
+): BoardState {
+  const board = loadBoard(worktreeId, boardId);
+
+  // Apply updates
+  if (updates.name !== undefined) board.name = updates.name;
+  if (updates.description !== undefined) board.description = updates.description;
+  if (updates.sprint !== undefined) board.sprint = updates.sprint;
+  if (updates.columns !== undefined) board.columns = updates.columns;
+
+  saveBoard(worktreeId, boardId, board);
+  return board;
 }
 
 /**

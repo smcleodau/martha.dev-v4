@@ -63,6 +63,12 @@ export interface DocumentationLinks {
   related_docs: string[];
 }
 
+export interface Links {
+  pr: string | null;
+  related_issues: string[];
+  external: string[];
+}
+
 export interface Issue {
   id: string;
   worktree_id: string;
@@ -80,6 +86,7 @@ export interface Issue {
   } | null;
   labels: string[];
   documentation: DocumentationLinks;
+  links: Links;
   metadata: {
     created_at: string;
     updated_at: string;

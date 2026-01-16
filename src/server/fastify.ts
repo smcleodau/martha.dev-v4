@@ -28,6 +28,7 @@ import { commentsRoutes } from '../tracker/routes/comments.js';
 import { agentsRoutes } from '../tracker/routes/agents.js';
 import { authRoutes } from '../tracker/routes/auth.js';
 import { worktreesRoutes as trackerWorktreesRoutes } from '../tracker/routes/worktrees.js';
+import { documentationRoutes, issueDocumentationRoutes } from '../tracker/routes/documentation.js';
 
 const serverLogger = createLogger({ module: 'fastify' });
 
@@ -121,6 +122,14 @@ export async function createServer() {
   });
   await server.register(hierarchicalIssuesRoutes, {
     prefix: '/api/tracker/worktrees/:worktreeId/boards/:boardId/issues',
+  });
+
+  // Register documentation routes
+  await server.register(documentationRoutes, {
+    prefix: '/api/tracker/worktrees/:worktreeId/documentation',
+  });
+  await server.register(issueDocumentationRoutes, {
+    prefix: '/api/tracker/worktrees/:worktreeId/issues/:issueId/documentation',
   });
 
   serverLogger.info('Tracker routes registered');

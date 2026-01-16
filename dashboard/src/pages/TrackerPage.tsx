@@ -48,11 +48,14 @@ export function TrackerPage() {
   async function loadWorktrees() {
     try {
       const worktreesList = await worktreesApi.list();
-      setWorktrees(worktreesList);
+
+      // Filter to only valid tracker worktrees (with id field)
+      const validWorktrees = worktreesList.filter(w => w.id && w.boards);
+      setWorktrees(validWorktrees);
 
       // If current selection is not in list, select first
-      if (worktreesList.length > 0 && !worktreesList.find(w => w.id === selectedWorktreeId)) {
-        setSelectedWorktreeId(worktreesList[0].id);
+      if (validWorktrees.length > 0 && !validWorktrees.find(w => w.id === selectedWorktreeId)) {
+        setSelectedWorktreeId(validWorktrees[0].id);
       }
     } catch (err) {
       console.error('Failed to load worktrees:', err);
@@ -145,7 +148,7 @@ export function TrackerPage() {
     }
   }
 
-  if (loading) {
+  if (loading || worktrees.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -201,7 +204,7 @@ export function TrackerPage() {
               >
                 {worktrees.map((worktree) => (
                   <option key={worktree.id} value={worktree.id}>
-                    {worktree.display_name} ({worktree.boards.length} boards)
+                    {worktree.display_name} ({(worktree.boards || []).length} boards)
                   </option>
                 ))}
               </select>

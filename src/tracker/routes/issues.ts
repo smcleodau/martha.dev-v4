@@ -1,11 +1,9 @@
 /**
- * Issues Routes
- * Handles CRUD operations for tracker issues
- * Ported from martha-workflow/tracker/api/routes/issues.py
+ * Issues Routes with Multi-Board Support
+ * Handles CRUD operations for tracker issues with worktree/board scoping
  */
 
 import { FastifyPluginAsync } from 'fastify';
-import * as path from 'node:path';
 import {
   loadIndex,
   saveIndex,
@@ -13,6 +11,7 @@ import {
   updateIndex,
   removeFromIndex,
   getNextIssueId,
+  getIssuesByBoard,
 } from '../services/index-manager.js';
 import {
   loadBoard,
@@ -24,7 +23,7 @@ import {
 import {
   readJsonSync,
   writeJsonSync,
-  getTrackerPath,
+  getIssuePath,
   deleteFile,
   fileExists,
 } from '../services/file-storage.js';
@@ -58,24 +57,23 @@ interface IssueMoveRequest {
 }
 
 /**
- * Get issue file path
- */
-function getIssuePath(issueId: string): string {
-  return getTrackerPath('issues', `${issueId}.json`);
-}
-
-/**
  * Create new issue
  */
-function createIssue(data: IssueCreateRequest): Issue {
-  const index = loadIndex();
-  const board = loadBoard();
+function createIssue(
+  worktreeId: string,
+  boardId: string,
+  data: IssueCreateRequest
+): Issue {
+  const index = loadIndex(worktreeId);
+  const board = loadBoard(worktreeId, boardId);
 
   const issueId = getNextIssueId(index);
   const now = new Date().toISOString();
 
   const issue: Issue = {
     id: issueId,
+    worktree_id: worktreeId,
+    board_id: boardId,
     type: data.type || 'task',
     title: data.title,
     description: data.description || '',
@@ -97,6 +95,11 @@ function createIssue(data: IssueCreateRequest): Issue {
       related_issues: [],
       external: [],
     },
+    documentation: {
+      overview: null,
+      technical_spec: null,
+      related_docs: [],
+    },
     github_sync: {
       issue_number: null,
       last_synced: null,
@@ -110,16 +113,16 @@ function createIssue(data: IssueCreateRequest): Issue {
   };
 
   // Save issue file
-  const issuePath = getIssuePath(issueId);
+  const issuePath = getIssuePath(worktreeId, boardId, issueId);
   writeJsonSync(issuePath, issue);
 
   // Update index
   addToIndex(index, issue);
-  saveIndex(index);
+  saveIndex(worktreeId, index);
 
   // Add to board
   addToBoard(board, issueId, issue.status);
-  saveBoard(board);
+  saveBoard(worktreeId, boardId, board);
 
   return issue;
 }
@@ -127,8 +130,8 @@ function createIssue(data: IssueCreateRequest): Issue {
 /**
  * Get issue by ID
  */
-function getIssue(issueId: string): Issue | null {
-  const issuePath = getIssuePath(issueId);
+function getIssue(worktreeId: string, boardId: string, issueId: string): Issue | null {
+  const issuePath = getIssuePath(worktreeId, boardId, issueId);
   if (!fileExists(issuePath)) {
     return null;
   }
@@ -138,8 +141,13 @@ function getIssue(issueId: string): Issue | null {
 /**
  * Update issue
  */
-function updateIssue(issueId: string, data: IssueUpdateRequest): Issue | null {
-  const issue = getIssue(issueId);
+function updateIssue(
+  worktreeId: string,
+  boardId: string,
+  issueId: string,
+  data: IssueUpdateRequest
+): Issue | null {
+  const issue = getIssue(worktreeId, boardId, issueId);
   if (!issue) return null;
 
   const oldIssue = { ...issue };
@@ -160,19 +168,19 @@ function updateIssue(issueId: string, data: IssueUpdateRequest): Issue | null {
   issue.github_sync.dirty = true;
 
   // Save issue file
-  const issuePath = getIssuePath(issueId);
+  const issuePath = getIssuePath(worktreeId, boardId, issueId);
   writeJsonSync(issuePath, issue);
 
   // Update index
-  const index = loadIndex();
+  const index = loadIndex(worktreeId);
   updateIndex(index, oldIssue, issue);
-  saveIndex(index);
+  saveIndex(worktreeId, index);
 
   // Update board if status changed
   if (data.status && oldStatus !== issue.status) {
-    const board = loadBoard();
+    const board = loadBoard(worktreeId, boardId);
     moveOnBoard(board, issueId, oldStatus, issue.status);
-    saveBoard(board);
+    saveBoard(worktreeId, boardId, board);
   }
 
   return issue;
@@ -181,23 +189,23 @@ function updateIssue(issueId: string, data: IssueUpdateRequest): Issue | null {
 /**
  * Delete issue
  */
-function deleteIssue(issueId: string): boolean {
-  const issue = getIssue(issueId);
+function deleteIssue(worktreeId: string, boardId: string, issueId: string): boolean {
+  const issue = getIssue(worktreeId, boardId, issueId);
   if (!issue) return false;
 
   // Delete issue file
-  const issuePath = getIssuePath(issueId);
+  const issuePath = getIssuePath(worktreeId, boardId, issueId);
   deleteFile(issuePath);
 
   // Remove from index
-  const index = loadIndex();
+  const index = loadIndex(worktreeId);
   removeFromIndex(index, issue);
-  saveIndex(index);
+  saveIndex(worktreeId, index);
 
   // Remove from board
-  const board = loadBoard();
+  const board = loadBoard(worktreeId, boardId);
   removeFromBoard(board, issueId, issue.status);
-  saveBoard(board);
+  saveBoard(worktreeId, boardId, board);
 
   return true;
 }
@@ -205,14 +213,23 @@ function deleteIssue(issueId: string): boolean {
 /**
  * List issues with optional filters
  */
-function listIssues(filters?: {
-  status?: string;
-  type?: string;
-  parent_id?: string;
-  assignee?: string;
-}): Issue[] {
-  const index = loadIndex();
+function listIssues(
+  worktreeId: string,
+  boardId?: string,
+  filters?: {
+    status?: string;
+    type?: string;
+    parent_id?: string;
+    assignee?: string;
+  }
+): Issue[] {
+  const index = loadIndex(worktreeId);
   let issueIds = Object.keys(index.issues);
+
+  // Filter by board if specified
+  if (boardId) {
+    issueIds = getIssuesByBoard(index, boardId);
+  }
 
   // Apply filters
   if (filters?.status) {
@@ -227,7 +244,10 @@ function listIssues(filters?: {
 
   // Load full issues
   const issues = issueIds
-    .map((id) => getIssue(id))
+    .map((id) => {
+      const entry = index.issues[id];
+      return getIssue(worktreeId, entry.board_id, id);
+    })
     .filter((issue): issue is Issue => issue !== null);
 
   // Filter by assignee if needed (requires full issue data)
@@ -236,20 +256,21 @@ function listIssues(filters?: {
   }
 
   // Sort by updated_at descending
-  // Handle both old Python format (updated_at at top level) and new TS format (metadata.updated_at)
   return issues.sort((a, b) => {
-    const aUpdated = (a.metadata?.updated_at || (a as any).updated_at) as string;
-    const bUpdated = (b.metadata?.updated_at || (b as any).updated_at) as string;
+    const aUpdated = a.metadata.updated_at;
+    const bUpdated = b.metadata.updated_at;
     return new Date(bUpdated).getTime() - new Date(aUpdated).getTime();
   });
 }
 
 /**
- * Fastify plugin for issues routes
+ * Fastify plugin for hierarchical issues routes
+ * Mounted at /api/tracker/worktrees/:worktreeId/boards/:boardId/issues
  */
-export const issuesRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/tracker/issues - List issues
+export const hierarchicalIssuesRoutes: FastifyPluginAsync = async (fastify) => {
+  // GET /api/tracker/worktrees/:worktreeId/boards/:boardId/issues - List issues
   fastify.get<{
+    Params: { worktreeId: string; boardId: string };
     Querystring: {
       status?: string;
       type?: string;
@@ -258,7 +279,11 @@ export const issuesRoutes: FastifyPluginAsync = async (fastify) => {
     };
   }>('/', async (request, reply) => {
     try {
-      const issues = listIssues(request.query);
+      const issues = listIssues(
+        request.params.worktreeId,
+        request.params.boardId,
+        request.query
+      );
       return reply.send({ issues, count: issues.length });
     } catch (error) {
       fastify.log.error('Failed to list issues:', error);
@@ -266,12 +291,16 @@ export const issuesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // GET /api/tracker/issues/:id - Get single issue
+  // GET /api/tracker/worktrees/:worktreeId/boards/:boardId/issues/:id - Get single issue
   fastify.get<{
-    Params: { id: string };
+    Params: { worktreeId: string; boardId: string; id: string };
   }>('/:id', async (request, reply) => {
     try {
-      const issue = getIssue(request.params.id);
+      const issue = getIssue(
+        request.params.worktreeId,
+        request.params.boardId,
+        request.params.id
+      );
       if (!issue) {
         return reply.status(404).send({ error: 'Issue not found' });
       }
@@ -282,12 +311,17 @@ export const issuesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // POST /api/tracker/issues - Create issue
+  // POST /api/tracker/worktrees/:worktreeId/boards/:boardId/issues - Create issue
   fastify.post<{
+    Params: { worktreeId: string; boardId: string };
     Body: IssueCreateRequest;
   }>('/', async (request, reply) => {
     try {
-      const issue = createIssue(request.body);
+      const issue = createIssue(
+        request.params.worktreeId,
+        request.params.boardId,
+        request.body
+      );
       return reply.status(201).send(issue);
     } catch (error) {
       fastify.log.error('Failed to create issue:', error);
@@ -295,13 +329,18 @@ export const issuesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // PATCH /api/tracker/issues/:id - Update issue
+  // PATCH /api/tracker/worktrees/:worktreeId/boards/:boardId/issues/:id - Update issue
   fastify.patch<{
-    Params: { id: string };
+    Params: { worktreeId: string; boardId: string; id: string };
     Body: IssueUpdateRequest;
   }>('/:id', async (request, reply) => {
     try {
-      const issue = updateIssue(request.params.id, request.body);
+      const issue = updateIssue(
+        request.params.worktreeId,
+        request.params.boardId,
+        request.params.id,
+        request.body
+      );
       if (!issue) {
         return reply.status(404).send({ error: 'Issue not found' });
       }
@@ -312,29 +351,16 @@ export const issuesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // PATCH /api/tracker/issues/:id/status - Move issue to different status
-  fastify.patch<{
-    Params: { id: string };
-    Body: IssueMoveRequest;
-  }>('/:id/status', async (request, reply) => {
-    try {
-      const issue = updateIssue(request.params.id, { status: request.body.status });
-      if (!issue) {
-        return reply.status(404).send({ error: 'Issue not found' });
-      }
-      return reply.send(issue);
-    } catch (error) {
-      fastify.log.error('Failed to move issue:', error);
-      return reply.status(500).send({ error: 'Failed to move issue' });
-    }
-  });
-
-  // DELETE /api/tracker/issues/:id - Delete issue
+  // DELETE /api/tracker/worktrees/:worktreeId/boards/:boardId/issues/:id - Delete issue
   fastify.delete<{
-    Params: { id: string };
+    Params: { worktreeId: string; boardId: string; id: string };
   }>('/:id', async (request, reply) => {
     try {
-      const deleted = deleteIssue(request.params.id);
+      const deleted = deleteIssue(
+        request.params.worktreeId,
+        request.params.boardId,
+        request.params.id
+      );
       if (!deleted) {
         return reply.status(404).send({ error: 'Issue not found' });
       }
@@ -345,13 +371,153 @@ export const issuesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // POST /api/tracker/issues/:id/move - Move issue (for board drag-drop)
+  // POST /api/tracker/worktrees/:worktreeId/boards/:boardId/issues/:id/move - Move issue
+  fastify.post<{
+    Params: { worktreeId: string; boardId: string; id: string };
+    Body: { status: string; index?: number };
+  }>('/:id/move', async (request, reply) => {
+    try {
+      const issue = updateIssue(
+        request.params.worktreeId,
+        request.params.boardId,
+        request.params.id,
+        { status: request.body.status }
+      );
+      if (!issue) {
+        return reply.status(404).send({ error: 'Issue not found' });
+      }
+      return reply.send(issue);
+    } catch (error) {
+      fastify.log.error('Failed to move issue:', error);
+      return reply.status(500).send({ error: 'Failed to move issue' });
+    }
+  });
+};
+
+/**
+ * Fastify plugin for backward-compatible issues routes
+ * Mounted at /api/tracker/issues
+ * Maps to default worktree and attempts to find issue across all boards
+ */
+export const issuesRoutes: FastifyPluginAsync = async (fastify) => {
+  const DEFAULT_WORKTREE = 'default';
+  const DEFAULT_BOARD = 'default';
+
+  // GET /api/tracker/issues - List issues (DEPRECATED)
+  fastify.get<{
+    Querystring: {
+      status?: string;
+      type?: string;
+      parent_id?: string;
+      assignee?: string;
+    };
+  }>('/', async (request, reply) => {
+    try {
+      const issues = listIssues(DEFAULT_WORKTREE, undefined, request.query);
+      return reply.send({ issues, count: issues.length });
+    } catch (error) {
+      fastify.log.error('Failed to list issues:', error);
+      return reply.status(500).send({ error: 'Failed to list issues' });
+    }
+  });
+
+  // GET /api/tracker/issues/:id - Get single issue (DEPRECATED)
+  fastify.get<{
+    Params: { id: string };
+  }>('/:id', async (request, reply) => {
+    try {
+      // Try default board first
+      let issue = getIssue(DEFAULT_WORKTREE, DEFAULT_BOARD, request.params.id);
+
+      // If not found, search across all boards in default worktree
+      if (!issue) {
+        const index = loadIndex(DEFAULT_WORKTREE);
+        const entry = index.issues[request.params.id];
+        if (entry) {
+          issue = getIssue(DEFAULT_WORKTREE, entry.board_id, request.params.id);
+        }
+      }
+
+      if (!issue) {
+        return reply.status(404).send({ error: 'Issue not found' });
+      }
+      return reply.send(issue);
+    } catch (error) {
+      fastify.log.error('Failed to get issue:', error);
+      return reply.status(500).send({ error: 'Failed to get issue' });
+    }
+  });
+
+  // POST /api/tracker/issues - Create issue (DEPRECATED)
+  fastify.post<{
+    Body: IssueCreateRequest;
+  }>('/', async (request, reply) => {
+    try {
+      const issue = createIssue(DEFAULT_WORKTREE, DEFAULT_BOARD, request.body);
+      return reply.status(201).send(issue);
+    } catch (error) {
+      fastify.log.error('Failed to create issue:', error);
+      return reply.status(500).send({ error: 'Failed to create issue' });
+    }
+  });
+
+  // PATCH /api/tracker/issues/:id - Update issue (DEPRECATED)
+  fastify.patch<{
+    Params: { id: string };
+    Body: IssueUpdateRequest;
+  }>('/:id', async (request, reply) => {
+    try {
+      // Find the issue's board first
+      const index = loadIndex(DEFAULT_WORKTREE);
+      const entry = index.issues[request.params.id];
+      const boardId = entry?.board_id || DEFAULT_BOARD;
+
+      const issue = updateIssue(DEFAULT_WORKTREE, boardId, request.params.id, request.body);
+      if (!issue) {
+        return reply.status(404).send({ error: 'Issue not found' });
+      }
+      return reply.send(issue);
+    } catch (error) {
+      fastify.log.error('Failed to update issue:', error);
+      return reply.status(500).send({ error: 'Failed to update issue' });
+    }
+  });
+
+  // DELETE /api/tracker/issues/:id - Delete issue (DEPRECATED)
+  fastify.delete<{
+    Params: { id: string };
+  }>('/:id', async (request, reply) => {
+    try {
+      // Find the issue's board first
+      const index = loadIndex(DEFAULT_WORKTREE);
+      const entry = index.issues[request.params.id];
+      const boardId = entry?.board_id || DEFAULT_BOARD;
+
+      const deleted = deleteIssue(DEFAULT_WORKTREE, boardId, request.params.id);
+      if (!deleted) {
+        return reply.status(404).send({ error: 'Issue not found' });
+      }
+      return reply.status(204).send();
+    } catch (error) {
+      fastify.log.error('Failed to delete issue:', error);
+      return reply.status(500).send({ error: 'Failed to delete issue' });
+    }
+  });
+
+  // POST /api/tracker/issues/:id/move - Move issue (DEPRECATED)
   fastify.post<{
     Params: { id: string };
     Body: { status: string; index?: number };
   }>('/:id/move', async (request, reply) => {
     try {
-      const issue = updateIssue(request.params.id, { status: request.body.status });
+      // Find the issue's board first
+      const index = loadIndex(DEFAULT_WORKTREE);
+      const entry = index.issues[request.params.id];
+      const boardId = entry?.board_id || DEFAULT_BOARD;
+
+      const issue = updateIssue(DEFAULT_WORKTREE, boardId, request.params.id, {
+        status: request.body.status,
+      });
       if (!issue) {
         return reply.status(404).send({ error: 'Issue not found' });
       }
@@ -362,7 +528,7 @@ export const issuesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // GET /api/tracker/issues/:id/agents - Get agents working on issue
+  // GET /api/tracker/issues/:id/agents - Get agents working on issue (DEPRECATED)
   fastify.get<{
     Params: { id: string };
   }>('/:id/agents', async (request, reply) => {

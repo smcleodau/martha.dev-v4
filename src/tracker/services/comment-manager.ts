@@ -8,6 +8,7 @@ import {
   readJsonSync,
   writeJsonSync,
   getTrackerPath,
+  getWorktreePath,
   listFiles,
   deleteFile,
   ensureDir,
@@ -16,21 +17,42 @@ import type { Comment, Assignee } from '../types.js';
 
 /**
  * Get comments directory for an issue
+ * @param worktreeId Worktree ID
  * @param issueId Issue ID
  * @returns Path to comments directory
  */
-function getCommentsDir(issueId: string): string {
-  return getTrackerPath('comments', issueId);
+function getCommentsDir(worktreeId: string, issueId: string): string {
+  return getWorktreePath(worktreeId, 'comments', issueId);
 }
 
 /**
  * Get comment file path
+ * @param worktreeId Worktree ID
  * @param issueId Issue ID
  * @param commentId Comment ID
  * @returns Path to comment file
  */
-function getCommentPath(issueId: string, commentId: string): string {
-  return path.join(getCommentsDir(issueId), `${commentId}.json`);
+function getCommentPath(worktreeId: string, issueId: string, commentId: string): string {
+  return path.join(getCommentsDir(worktreeId, issueId), `${commentId}.json`);
+}
+
+/**
+ * Get comments directory for an issue (backward compatibility)
+ * @param issueId Issue ID
+ * @returns Path to comments directory
+ */
+function getCommentsDirLegacy(issueId: string): string {
+  return getTrackerPath('comments', issueId);
+}
+
+/**
+ * Get comment file path (backward compatibility)
+ * @param issueId Issue ID
+ * @param commentId Comment ID
+ * @returns Path to comment file
+ */
+function getCommentPathLegacy(issueId: string, commentId: string): string {
+  return path.join(getCommentsDirLegacy(issueId), `${commentId}.json`);
 }
 
 /**
@@ -42,13 +64,19 @@ function generateCommentId(): string {
 }
 
 /**
- * Create a new comment
+ * Create a new comment (worktree-scoped)
+ * @param worktreeId Worktree ID
  * @param issueId Issue ID
  * @param author Comment author
  * @param content Comment content
  * @returns Created comment
  */
-export function createComment(issueId: string, author: Assignee, content: string): Comment {
+export function createCommentInWorktree(
+  worktreeId: string,
+  issueId: string,
+  author: Assignee,
+  content: string
+): Comment {
   const commentId = generateCommentId();
   const now = new Date().toISOString();
 
@@ -61,13 +89,24 @@ export function createComment(issueId: string, author: Assignee, content: string
     updated_at: now,
   };
 
-  const commentsDir = getCommentsDir(issueId);
+  const commentsDir = getCommentsDir(worktreeId, issueId);
   ensureDir(commentsDir);
 
-  const commentPath = getCommentPath(issueId, commentId);
+  const commentPath = getCommentPath(worktreeId, issueId, commentId);
   writeJsonSync(commentPath, comment);
 
   return comment;
+}
+
+/**
+ * Create a new comment (backward compatibility - uses default worktree)
+ * @param issueId Issue ID
+ * @param author Comment author
+ * @param content Comment content
+ * @returns Created comment
+ */
+export function createComment(issueId: string, author: Assignee, content: string): Comment {
+  return createCommentInWorktree('default', issueId, author, content);
 }
 
 /**

@@ -22,8 +22,8 @@ import { testRoutes } from './routes/tests.js';
 import { docsRoutes } from './routes/docs.js';
 
 // Tracker routes
-import { issuesRoutes } from '../tracker/routes/issues.js';
-import { boardRoutes } from '../tracker/routes/board.js';
+import { issuesRoutes, hierarchicalIssuesRoutes } from '../tracker/routes/issues.js';
+import { boardRoutes, hierarchicalBoardRoutes } from '../tracker/routes/board.js';
 import { commentsRoutes } from '../tracker/routes/comments.js';
 import { agentsRoutes } from '../tracker/routes/agents.js';
 import { authRoutes } from '../tracker/routes/auth.js';
@@ -107,13 +107,22 @@ export async function createServer() {
   await server.register(dashboardRoutes); // Changelog API
   await server.register(docsRoutes); // Documentation API
 
-  // Register tracker routes
+  // Register tracker routes (backward compatible)
   await server.register(authRoutes, { prefix: '/api/tracker/auth' });
   await server.register(issuesRoutes, { prefix: '/api/tracker/issues' });
   await server.register(boardRoutes, { prefix: '/api/tracker/board' });
   await server.register(commentsRoutes, { prefix: '/api/tracker' });
   await server.register(agentsRoutes, { prefix: '/api/tracker/agents' });
   await server.register(trackerWorktreesRoutes, { prefix: '/api/tracker/worktrees' });
+
+  // Register hierarchical multi-board tracker routes
+  await server.register(hierarchicalBoardRoutes, {
+    prefix: '/api/tracker/worktrees/:worktreeId/boards',
+  });
+  await server.register(hierarchicalIssuesRoutes, {
+    prefix: '/api/tracker/worktrees/:worktreeId/boards/:boardId/issues',
+  });
+
   serverLogger.info('Tracker routes registered');
 
   // Register static file serving for React dashboard (after all API routes)

@@ -34,6 +34,10 @@
     "mcp": "tsx src/mcp/server.ts",
     "mcp:build": "swc src/mcp -d dist/mcp --copy-files",
     "mcp:start": "node dist/mcp/server.js",
+    "worker": "tsx src/temporal/worker.ts",
+    "worker:build": "swc src/temporal -d dist/temporal --copy-files && swc src/workflows -d dist/workflows --copy-files && swc src/activities -d dist/activities --copy-files",
+    "worker:start": "node dist/temporal/worker.js",
+    "temporal:client": "tsx -e 'import { getTemporalClient } from \"./src/temporal/client.js\"; getTemporalClient().then(() => console.log(\"Connected!\"))'",
     "prepare": "husky install || true"
   },
   "keywords": [
@@ -53,6 +57,10 @@
     "@modelcontextprotocol/sdk": "^0.5.0",
     "@octokit/graphql": "^7.0.2",
     "@octokit/rest": "^20.0.2",
+    "@temporalio/activity": "^1.14.1",
+    "@temporalio/client": "^1.14.1",
+    "@temporalio/worker": "^1.14.1",
+    "@temporalio/workflow": "^1.14.1",
     "axios": "^1.6.5",
     "chokidar": "^3.6.0",
     "dockerode": "^4.0.2",

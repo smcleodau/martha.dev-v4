@@ -13,6 +13,9 @@ function App() {
         <Routes>
           <Route path="/" element={<OverviewPage />} />
           <Route path="/tracker" element={<TrackerPage />} />
+          <Route path="/tracker/:worktreeId" element={<TrackerPage />} />
+          <Route path="/tracker/:worktreeId/:boardId" element={<TrackerPage />} />
+          <Route path="/tracker/:worktreeId/:boardId/:issueId" element={<TrackerPage />} />
           <Route path="/logs" element={<LogsPage />} />
           <Route path="/docs" element={<DocumentationPage />} />
           <Route path="/docs/:docId" element={<DocumentationPage />} />

@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   boardsApi,
   worktreesApi,
@@ -13,23 +14,40 @@ import {
 } from '../api/tracker';
 
 export function TrackerPage() {
+  // URL params
+  const params = useParams<{ worktreeId?: string; boardId?: string; issueId?: string }>();
+  const navigate = useNavigate();
+
   // Multi-board state
   const [worktrees, setWorktrees] = useState<WorktreeConfig[]>([]);
-  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string>('martha-dev-v4');
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string>(params.worktreeId || 'martha-dev-v4');
   const [boards, setBoards] = useState<Board[]>([]);
-  const [selectedBoardId, setSelectedBoardId] = useState<string>('temporal-foundation');
+  const [selectedBoardId, setSelectedBoardId] = useState<string>(params.boardId || 'phase1-temporal-foundation');
 
   // Current board data
   const [board, setBoard] = useState<Board | null>(null);
   const [issues, setIssues] = useState<Record<string, Issue>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedIssue, setSelectedIssue] = useState<string | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<string | null>(params.issueId || null);
 
   // Load worktrees on mount
   useEffect(() => {
     loadWorktrees();
   }, []);
+
+  // Sync URL params to state
+  useEffect(() => {
+    if (params.worktreeId && params.worktreeId !== selectedWorktreeId) {
+      setSelectedWorktreeId(params.worktreeId);
+    }
+    if (params.boardId && params.boardId !== selectedBoardId) {
+      setSelectedBoardId(params.boardId);
+    }
+    if (params.issueId !== selectedIssue) {
+      setSelectedIssue(params.issueId || null);
+    }
+  }, [params.worktreeId, params.boardId, params.issueId]);
 
   // Load boards when worktree changes
   useEffect(() => {
@@ -199,7 +217,11 @@ export function TrackerPage() {
               <label className="text-sm font-medium text-gray-700">Worktree:</label>
               <select
                 value={selectedWorktreeId}
-                onChange={(e) => setSelectedWorktreeId(e.target.value)}
+                onChange={(e) => {
+                  const newWorktreeId = e.target.value;
+                  setSelectedWorktreeId(newWorktreeId);
+                  navigate(`/tracker/${newWorktreeId}`);
+                }}
                 className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {worktrees.map((worktree) => (
@@ -221,7 +243,10 @@ export function TrackerPage() {
             {boards.map((b) => (
               <button
                 key={b.id}
-                onClick={() => setSelectedBoardId(b.id)}
+                onClick={() => {
+                  setSelectedBoardId(b.id);
+                  navigate(`/tracker/${selectedWorktreeId}/${b.id}`);
+                }}
                 className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   b.id === selectedBoardId
                     ? 'border-blue-500 text-blue-600'
@@ -308,7 +333,10 @@ export function TrackerPage() {
                   return (
                     <div
                       key={issueId}
-                      onClick={() => setSelectedIssue(issueId)}
+                      onClick={() => {
+                        setSelectedIssue(issueId);
+                        navigate(`/tracker/${selectedWorktreeId}/${selectedBoardId}/${issueId}`);
+                      }}
                       className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer"
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -366,7 +394,10 @@ export function TrackerPage() {
             <div className="flex items-start justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">{issues[selectedIssue].title}</h2>
               <button
-                onClick={() => setSelectedIssue(null)}
+                onClick={() => {
+                  setSelectedIssue(null);
+                  navigate(`/tracker/${selectedWorktreeId}/${selectedBoardId}`);
+                }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 ✕

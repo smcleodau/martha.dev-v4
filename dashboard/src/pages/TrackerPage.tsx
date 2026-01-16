@@ -1,41 +1,99 @@
 /**
- * Tracker Page - Kanban Board UI
+ * Tracker Page - Multi-Board Kanban UI
  */
 
 import { useState, useEffect } from 'react';
-import { boardApi, issuesApi, type Issue, type Board } from '../api/tracker';
+import {
+  boardsApi,
+  worktreesApi,
+  hierarchicalIssuesApi,
+  type Issue,
+  type Board,
+  type WorktreeConfig,
+} from '../api/tracker';
 
 export function TrackerPage() {
+  // Multi-board state
+  const [worktrees, setWorktrees] = useState<WorktreeConfig[]>([]);
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string>('martha-dev-v4');
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [selectedBoardId, setSelectedBoardId] = useState<string>('temporal-foundation');
+
+  // Current board data
   const [board, setBoard] = useState<Board | null>(null);
   const [issues, setIssues] = useState<Record<string, Issue>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<string | null>(null);
 
-  // Load board and issues
+  // Load worktrees on mount
   useEffect(() => {
-    loadData();
+    loadWorktrees();
   }, []);
 
-  async function loadData() {
+  // Load boards when worktree changes
+  useEffect(() => {
+    if (selectedWorktreeId) {
+      loadBoards(selectedWorktreeId);
+    }
+  }, [selectedWorktreeId]);
+
+  // Load board and issues when board changes
+  useEffect(() => {
+    if (selectedWorktreeId && selectedBoardId) {
+      loadBoardData(selectedWorktreeId, selectedBoardId);
+    }
+  }, [selectedWorktreeId, selectedBoardId]);
+
+  async function loadWorktrees() {
+    try {
+      const worktreesList = await worktreesApi.list();
+      setWorktrees(worktreesList);
+
+      // If current selection is not in list, select first
+      if (worktreesList.length > 0 && !worktreesList.find(w => w.id === selectedWorktreeId)) {
+        setSelectedWorktreeId(worktreesList[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load worktrees:', err);
+      setError('Failed to load worktrees');
+    }
+  }
+
+  async function loadBoards(worktreeId: string) {
+    try {
+      const boardsList = await boardsApi.list(worktreeId);
+      setBoards(boardsList);
+
+      // If current selection is not in list, select first
+      if (boardsList.length > 0 && !boardsList.find(b => b.id === selectedBoardId)) {
+        setSelectedBoardId(boardsList[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load boards:', err);
+      setError('Failed to load boards');
+    }
+  }
+
+  async function loadBoardData(worktreeId: string, boardId: string) {
     try {
       setLoading(true);
       setError(null);
 
       // Load board state
-      const boardData = await boardApi.get();
+      const boardData = await boardsApi.get(worktreeId, boardId);
       setBoard(boardData);
 
-      // Load all issues
-      const issuesList = await issuesApi.list();
+      // Load all issues for this board
+      const issuesList = await hierarchicalIssuesApi.list(worktreeId, boardId);
       const issuesMap: Record<string, Issue> = {};
       issuesList.forEach((issue) => {
         issuesMap[issue.id] = issue;
       });
       setIssues(issuesMap);
     } catch (err) {
-      console.error('Failed to load tracker data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load tracker');
+      console.error('Failed to load board data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load board');
     } finally {
       setLoading(false);
     }
@@ -43,8 +101,10 @@ export function TrackerPage() {
 
   // Handle issue creation
   async function handleCreateIssue(title: string, type: 'task' | 'bug' | 'story' | 'epic') {
+    if (!selectedWorktreeId || !selectedBoardId) return;
+
     try {
-      const newIssue = await issuesApi.create({
+      const newIssue = await hierarchicalIssuesApi.create(selectedWorktreeId, selectedBoardId, {
         title,
         type,
         status: 'backlog',
@@ -55,7 +115,7 @@ export function TrackerPage() {
       setIssues((prev) => ({ ...prev, [newIssue.id]: newIssue }));
 
       // Reload board to update column
-      await loadData();
+      await loadBoardData(selectedWorktreeId, selectedBoardId);
     } catch (err) {
       console.error('Failed to create issue:', err);
       alert('Failed to create issue');
@@ -64,14 +124,21 @@ export function TrackerPage() {
 
   // Handle issue status change (drag-drop)
   async function handleMoveIssue(issueId: string, newStatus: string) {
+    if (!selectedWorktreeId || !selectedBoardId) return;
+
     try {
-      const updatedIssue = await issuesApi.move(issueId, newStatus);
+      const updatedIssue = await hierarchicalIssuesApi.move(
+        selectedWorktreeId,
+        selectedBoardId,
+        issueId,
+        newStatus
+      );
 
       // Update local state
       setIssues((prev) => ({ ...prev, [updatedIssue.id]: updatedIssue }));
 
       // Reload board
-      await loadData();
+      await loadBoardData(selectedWorktreeId, selectedBoardId);
     } catch (err) {
       console.error('Failed to move issue:', err);
       alert('Failed to move issue');
@@ -97,7 +164,7 @@ export function TrackerPage() {
           <h2 className="text-xl font-bold text-gray-800 mb-2">Failed to Load Tracker</h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
-            onClick={loadData}
+            onClick={() => loadBoardData(selectedWorktreeId, selectedBoardId)}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
             Retry
@@ -115,37 +182,91 @@ export function TrackerPage() {
     );
   }
 
+  const currentWorktree = worktrees.find(w => w.id === selectedWorktreeId);
+  const currentBoard = boards.find(b => b.id === selectedBoardId);
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Issue Tracker</h1>
-            {board.sprint && (
-              <p className="text-sm text-gray-600 mt-1">
-                Sprint: {board.sprint.name} ({new Date(board.sprint.start_date).toLocaleDateString()} - {new Date(board.sprint.end_date).toLocaleDateString()})
-              </p>
-            )}
+      {/* Header with Worktree Selector and Board Tabs */}
+      <div className="bg-white border-b border-gray-200">
+        {/* Worktree Selector */}
+        <div className="px-6 py-3 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <label className="text-sm font-medium text-gray-700">Worktree:</label>
+              <select
+                value={selectedWorktreeId}
+                onChange={(e) => setSelectedWorktreeId(e.target.value)}
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {worktrees.map((worktree) => (
+                  <option key={worktree.id} value={worktree.id}>
+                    {worktree.display_name} ({worktree.boards.length} boards)
+                  </option>
+                ))}
+              </select>
+              {currentWorktree && (
+                <span className="text-sm text-gray-500">{currentWorktree.description}</span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => {
-                const title = prompt('Issue title:');
-                if (title) {
-                  handleCreateIssue(title, 'task');
-                }
-              }}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              + New Issue
-            </button>
-            <button
-              onClick={loadData}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              ↻ Refresh
-            </button>
+        </div>
+
+        {/* Board Tabs */}
+        <div className="px-6">
+          <div className="flex items-center space-x-1 overflow-x-auto">
+            {boards.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => setSelectedBoardId(b.id)}
+                className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  b.id === selectedBoardId
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                }`}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Board Info and Actions */}
+        <div className="px-6 py-4 border-t border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">
+                {currentBoard?.name || 'Board'}
+              </h1>
+              {currentBoard?.description && (
+                <p className="text-sm text-gray-600 mt-1">{currentBoard.description}</p>
+              )}
+              {board.sprint && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Sprint: {board.sprint.name} ({new Date(board.sprint.start_date).toLocaleDateString()} - {new Date(board.sprint.end_date).toLocaleDateString()})
+                </p>
+              )}
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  const title = prompt('Issue title:');
+                  if (title) {
+                    const type = prompt('Type (task/bug/story/epic):', 'task') as any;
+                    handleCreateIssue(title, type || 'task');
+                  }
+                }}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                + New Issue
+              </button>
+              <button
+                onClick={() => loadBoardData(selectedWorktreeId, selectedBoardId)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                ↻ Refresh
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -235,7 +356,7 @@ export function TrackerPage() {
         </div>
       </div>
 
-      {/* Issue Detail Panel (Simplified) */}
+      {/* Issue Detail Panel */}
       {selectedIssue && issues[selectedIssue] && (
         <div className="fixed inset-y-0 right-0 w-96 bg-white border-l border-gray-200 shadow-xl overflow-y-auto">
           <div className="p-6">
@@ -274,6 +395,14 @@ export function TrackerPage() {
               <div>
                 <label className="text-sm font-medium text-gray-700">Priority</label>
                 <p className="text-sm text-gray-900">{issues[selectedIssue].priority}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Board</label>
+                <p className="text-sm text-gray-600">{issues[selectedIssue].board_id}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Worktree</label>
+                <p className="text-sm text-gray-600">{issues[selectedIssue].worktree_id}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Description</label>

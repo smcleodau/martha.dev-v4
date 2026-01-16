@@ -4,6 +4,8 @@ import { getSwarmOrchestrator } from '../../core/swarm-orchestrator.js';
 import { redis } from '../../redis/client.js';
 import { getIssueTracker } from '../../integrations/github/issue-tracker.js';
 import { getProjectBoard } from '../../integrations/github/project-board.js';
+import { telemetryWriter } from '../../services/TelemetryWriter.js';
+import { signalWorkflow } from '../../temporal/client.js';
 
 const logger = createLogger({ module: 'hooks' });
 
@@ -53,6 +55,11 @@ export interface ErrorPayload {
  *
  * These endpoints receive callbacks from claude-flow swarms
  * via the hook system configured in .claude/settings.json
+ *
+ * Phase 2 Update: Integrated telemetry tracking and Temporal workflow signaling
+ * - All hooks now write to telemetry_events table
+ * - Hooks forward events to Temporal workflows via signals
+ * - Maintains existing Redis pub/sub for real-time updates
  */
 export async function registerHookRoutes(fastify: FastifyInstance) {
   const swarmOrchestrator = getSwarmOrchestrator();
@@ -70,6 +77,42 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
     });
 
     try {
+      // Phase 2: Write to telemetry
+      const workflowId = payload.task_id ? `issue-lifecycle-${payload.task_id}` : `task-${payload.task_id}`;
+      await telemetryWriter.writeEvent({
+        workflowId,
+        workflowType: 'IssueLifecycleWorkflow',
+        eventType: payload.status === 'completed' ? 'task_completed' : 'task_failed',
+        eventCategory: 'hook',
+        severity: payload.status === 'completed' ? 'info' : 'error',
+        issueId: payload.task_id,
+        payload: {
+          task_description: payload.task_description,
+          worktree: payload.worktree,
+          epic_number: payload.epic_number,
+          error: payload.error,
+        },
+        durationMs: payload.duration_ms,
+        errorMessage: payload.error,
+        source: 'hook',
+      });
+
+      // Phase 2: Signal Temporal workflow
+      try {
+        if (payload.status === 'completed') {
+          await signalWorkflow(workflowId, 'agentCompleted', [{
+            agentId: `agent-${payload.task_id}`,
+            duration: payload.duration_ms || 0,
+          }]);
+        }
+      } catch (signalError) {
+        // Don't fail hook if signal fails - log and continue
+        logger.warn('Failed to signal workflow', {
+          workflowId,
+          error: signalError instanceof Error ? signalError.message : 'Unknown error',
+        });
+      }
+
       // Forward to swarm orchestrator
       await swarmOrchestrator.handleHook('task-complete', payload);
 

@@ -3,10 +3,87 @@
  *
  * Temporal activities for IssueLifecycleWorkflow.
  * All activities are idempotent and implement retry logic.
+ *
+ * Phase 2 Update: Integrated telemetry tracking for all activities
  */
 
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../utils/logger.js';
+import { Context } from '@temporalio/activity';
+import { telemetryWriter } from '../services/TelemetryWriter.js';
+
+/**
+ * Helper function to wrap activities with telemetry tracking
+ */
+async function withTelemetry<T>(
+  activityName: string,
+  issueId: string,
+  epicId: string | undefined,
+  fn: () => Promise<T>
+): Promise<T> {
+  const activityId = uuidv4();
+  const startTime = Date.now();
+  const info = Context.current().info;
+  const workflowId = info.workflowExecution.workflowId;
+
+  // Activity started
+  await telemetryWriter.writeEvent({
+    workflowId,
+    workflowType: 'IssueLifecycleWorkflow',
+    eventType: 'activity_started',
+    eventCategory: 'activity',
+    severity: 'info',
+    activityName,
+    activityId,
+    issueId,
+    epicId,
+    source: 'temporal',
+    retryAttempt: info.attempt,
+  });
+
+  try {
+    const result = await fn();
+    const durationMs = Date.now() - startTime;
+
+    // Activity completed
+    await telemetryWriter.writeEvent({
+      workflowId,
+      workflowType: 'IssueLifecycleWorkflow',
+      eventType: 'activity_completed',
+      eventCategory: 'activity',
+      severity: 'info',
+      activityName,
+      activityId,
+      issueId,
+      epicId,
+      durationMs,
+      source: 'temporal',
+    });
+
+    return result;
+  } catch (error: any) {
+    const durationMs = Date.now() - startTime;
+
+    // Activity failed
+    await telemetryWriter.writeEvent({
+      workflowId,
+      workflowType: 'IssueLifecycleWorkflow',
+      eventType: 'activity_failed',
+      eventCategory: 'activity',
+      severity: 'error',
+      activityName,
+      activityId,
+      issueId,
+      epicId,
+      durationMs,
+      errorMessage: error.message,
+      errorStack: error.stack,
+      source: 'temporal',
+    });
+
+    throw error;
+  }
+}
 
 // Types
 export interface PrepareIssueInput {
@@ -112,18 +189,36 @@ export async function prepareIssue(
   input: PrepareIssueInput
 ): Promise<PrepareIssueResult> {
   const activityId = uuidv4();
+  const startTime = Date.now();
+  const info = Context.current().info;
+  const workflowId = info.workflowExecution.workflowId;
 
   logger.info(
     { activityId, issueId: input.issueId },
     '[prepareIssue] Starting preparation'
   );
 
+  // Telemetry: Activity started
+  await telemetryWriter.writeEvent({
+    workflowId,
+    workflowType: 'IssueLifecycleWorkflow',
+    eventType: 'activity_started',
+    eventCategory: 'activity',
+    severity: 'info',
+    activityName: 'prepareIssue',
+    activityId,
+    issueId: input.issueId,
+    epicId: input.epicId,
+    payload: { title: input.title, complexity: input.complexity },
+    source: 'temporal',
+    retryAttempt: info.attempt,
+  });
+
   try {
     // TODO: Implement actual logic
     // 1. Validate issue exists in tracker
     // 2. Generate issue documentation
     // 3. Create feature branch (git checkout -b feature/TASK-123)
-    // 4. Write telemetry event
 
     const branch = `feature/${input.issueId}`;
 
@@ -136,17 +231,55 @@ export async function prepareIssue(
       documentationGenerated: true,
     };
 
+    const durationMs = Date.now() - startTime;
+
     logger.info(
       { activityId, issueId: input.issueId, branch },
       '[prepareIssue] Preparation completed'
     );
 
+    // Telemetry: Activity completed
+    await telemetryWriter.writeEvent({
+      workflowId,
+      workflowType: 'IssueLifecycleWorkflow',
+      eventType: 'activity_completed',
+      eventCategory: 'activity',
+      severity: 'info',
+      activityName: 'prepareIssue',
+      activityId,
+      issueId: input.issueId,
+      epicId: input.epicId,
+      payload: { branch, documentationGenerated: true },
+      durationMs,
+      source: 'temporal',
+    });
+
     return result;
   } catch (error: any) {
+    const durationMs = Date.now() - startTime;
+
     logger.error(
       { activityId, issueId: input.issueId, error: error.message },
       '[prepareIssue] Preparation failed'
     );
+
+    // Telemetry: Activity failed
+    await telemetryWriter.writeEvent({
+      workflowId,
+      workflowType: 'IssueLifecycleWorkflow',
+      eventType: 'activity_failed',
+      eventCategory: 'activity',
+      severity: 'error',
+      activityName: 'prepareIssue',
+      activityId,
+      issueId: input.issueId,
+      epicId: input.epicId,
+      durationMs,
+      errorMessage: error.message,
+      errorStack: error.stack,
+      source: 'temporal',
+    });
+
     throw error;
   }
 }

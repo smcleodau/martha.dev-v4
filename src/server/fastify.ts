@@ -25,6 +25,7 @@ import { docsRoutes } from './routes/docs.js';
 import { issuesRoutes, hierarchicalIssuesRoutes } from '../tracker/routes/issues.js';
 import { boardRoutes, hierarchicalBoardRoutes } from '../tracker/routes/board.js';
 import { commentsRoutes } from '../tracker/routes/comments.js';
+import { activityRoutes } from '../tracker/routes/activity.js';
 import { agentsRoutes } from '../tracker/routes/agents.js';
 import { authRoutes } from '../tracker/routes/auth.js';
 import { worktreesRoutes as trackerWorktreesRoutes } from '../tracker/routes/worktrees.js';
@@ -113,6 +114,7 @@ export async function createServer() {
   await server.register(issuesRoutes, { prefix: '/api/tracker/issues' });
   await server.register(boardRoutes, { prefix: '/api/tracker/board' });
   await server.register(commentsRoutes, { prefix: '/api/tracker' });
+  await server.register(activityRoutes, { prefix: '/api/tracker' });
   await server.register(agentsRoutes, { prefix: '/api/tracker/agents' });
   await server.register(trackerWorktreesRoutes, { prefix: '/api/tracker/worktrees' });
 
@@ -135,8 +137,9 @@ export async function createServer() {
   serverLogger.info('Tracker routes registered');
 
   // Register static file serving for React dashboard (after all API routes)
-  // When compiled, __dirname is at dist/src/server, so we need ../../../dashboard/dist
-  const dashboardDistPath = join(__dirname, '../../../dashboard/dist');
+  // Use process.cwd() to get project root, then add dashboard/dist
+  // This works for both tsx watch (dev) and compiled dist (prod)
+  const dashboardDistPath = join(process.cwd(), 'dashboard/dist');
   serverLogger.info('Registering static files', { path: dashboardDistPath });
 
   try {
@@ -200,6 +203,7 @@ export async function startServer() {
 
     return server;
   } catch (error) {
+    console.error('STARTUP ERROR:', error);
     serverLogger.error('Failed to start server', {
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,

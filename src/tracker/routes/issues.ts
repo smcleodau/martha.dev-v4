@@ -28,7 +28,8 @@ import {
   fileExists,
 } from '../services/file-storage.js';
 import { listSessionsForIssue } from '../services/agent-manager.js';
-import type { Issue, Assignee } from '../types.js';
+import { logActivity } from '../services/activity-manager.js';
+import type { Issue, Assignee, Links, QualityInfo, DocumentationLinks, TimeTracking } from '../types.js';
 
 // Request/Response schemas
 interface IssueCreateRequest {
@@ -50,6 +51,10 @@ interface IssueUpdateRequest {
   labels?: string[];
   priority?: 'critical' | 'high' | 'medium' | 'low';
   assignee?: Assignee | null;
+  links?: Links;
+  quality?: QualityInfo;
+  documentation?: DocumentationLinks;
+  time_tracking?: TimeTracking;
 }
 
 interface IssueMoveRequest {
@@ -161,6 +166,10 @@ function updateIssue(
   if (data.labels !== undefined) issue.labels = data.labels;
   if (data.priority !== undefined) issue.priority = data.priority;
   if (data.assignee !== undefined) issue.assignee = data.assignee;
+  if (data.links !== undefined) issue.links = data.links;
+  if (data.quality !== undefined) issue.quality = data.quality;
+  if (data.documentation !== undefined) issue.documentation = data.documentation;
+  if (data.time_tracking !== undefined) issue.time_tracking = data.time_tracking;
 
   // Update metadata
   issue.metadata.updated_at = new Date().toISOString();
@@ -322,6 +331,24 @@ export const hierarchicalIssuesRoutes: FastifyPluginAsync = async (fastify) => {
         request.params.boardId,
         request.body
       );
+
+      // Log activity
+      try {
+        logActivity(request.params.worktreeId, issue.id, {
+          issue_id: issue.id,
+          actor: { id: 'system', name: 'System' },
+          action: 'created',
+          metadata: {
+            issue_type: issue.type,
+            initial_status: issue.status,
+            priority: issue.priority
+          }
+        });
+      } catch (activityError) {
+        // Log error but don't fail the request
+        fastify.log.error('Failed to log activity:', activityError);
+      }
+
       return reply.status(201).send(issue);
     } catch (error) {
       fastify.log.error('Failed to create issue:', error);
@@ -335,6 +362,13 @@ export const hierarchicalIssuesRoutes: FastifyPluginAsync = async (fastify) => {
     Body: IssueUpdateRequest;
   }>('/:id', async (request, reply) => {
     try {
+      // Get old issue first for change detection
+      const oldIssue = getIssue(
+        request.params.worktreeId,
+        request.params.boardId,
+        request.params.id
+      );
+
       const issue = updateIssue(
         request.params.worktreeId,
         request.params.boardId,
@@ -344,6 +378,63 @@ export const hierarchicalIssuesRoutes: FastifyPluginAsync = async (fastify) => {
       if (!issue) {
         return reply.status(404).send({ error: 'Issue not found' });
       }
+
+      // Log activity for changes
+      try {
+        if (oldIssue) {
+          // Log status change
+          if (request.body.status && request.body.status !== oldIssue.status) {
+            logActivity(request.params.worktreeId, issue.id, {
+              issue_id: issue.id,
+              actor: { id: 'system', name: 'System' },
+              action: 'status_changed',
+              changes: [{
+                field: 'status',
+                old_value: oldIssue.status,
+                new_value: request.body.status
+              }]
+            });
+          }
+
+          // Log assignee change
+          if (request.body.assignee !== undefined &&
+              JSON.stringify(request.body.assignee) !== JSON.stringify(oldIssue.assignee)) {
+            logActivity(request.params.worktreeId, issue.id, {
+              issue_id: issue.id,
+              actor: { id: 'system', name: 'System' },
+              action: 'assigned',
+              changes: [{
+                field: 'assignee',
+                old_value: oldIssue.assignee,
+                new_value: request.body.assignee
+              }]
+            });
+          }
+
+          // Log other field changes
+          const fieldsToTrack = ['priority', 'title', 'description'] as const;
+          const changes = fieldsToTrack
+            .filter(field => request.body[field] !== undefined && request.body[field] !== oldIssue[field])
+            .map(field => ({
+              field,
+              old_value: oldIssue[field],
+              new_value: request.body[field]
+            }));
+
+          if (changes.length > 0) {
+            logActivity(request.params.worktreeId, issue.id, {
+              issue_id: issue.id,
+              actor: { id: 'system', name: 'System' },
+              action: 'updated',
+              changes
+            });
+          }
+        }
+      } catch (activityError) {
+        // Log error but don't fail the request
+        fastify.log.error('Failed to log activity:', activityError);
+      }
+
       return reply.send(issue);
     } catch (error) {
       fastify.log.error('Failed to update issue:', error);

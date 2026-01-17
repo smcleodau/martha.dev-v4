@@ -1,0 +1,1867 @@
+openapi: 3.0.3
+info:
+  title: Martha Tracker API
+  description: |
+    Comprehensive REST API for the Martha multi-board tracker system.
+
+    The tracker provides hierarchical issue management across multiple worktrees and boards,
+    with support for epics, stories, tasks, and bugs. It includes rich metadata, documentation
+    linking, agent integration, and real-time collaboration features.
+
+    ## Hierarchical Structure
+
+    The tracker follows a three-level hierarchy:
+    - **Worktrees**: Top-level containers representing code repositories or projects
+    - **Boards**: Kanban boards within a worktree for organizing issues
+    - **Issues**: Individual work items (epics, stories, tasks, bugs)
+
+    ## API Patterns
+
+    - **Hierarchical Routes**: `/api/tracker/worktrees/{worktreeId}/boards/{boardId}/issues`
+    - **Legacy Routes**: `/api/tracker/issues` (backward compatible)
+    - **Error Format**: Consistent JSON error responses
+    - **Authentication**: Cookie-based session auth (credentials: include)
+  version: 1.0.0
+  contact:
+    name: Martha Development Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:20000/api/tracker
+    description: Local development server
+  - url: https://api.martha.dev/api/tracker
+    description: Production server
+
+tags:
+  - name: Worktrees
+    description: Worktree management (top-level containers)
+  - name: Boards
+    description: Board management (kanban boards)
+  - name: Issues (Hierarchical)
+    description: Issue management via hierarchical routes
+  - name: Issues (Legacy)
+    description: Issue management via legacy flat routes
+  - name: Comments
+    description: Issue comments and discussions
+  - name: Documentation
+    description: Documentation management and linking
+  - name: Agents
+    description: AI agent session management
+  - name: Authentication
+    description: User authentication and session management
+
+components:
+  schemas:
+    # Core Data Models
+
+    WorktreeConfig:
+      type: object
+      required:
+        - id
+        - name
+        - display_name
+        - description
+        - path
+        - boards
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Unique identifier (slug format)
+          example: martha-dev-v4
+        name:
+          type: string
+          description: Internal name
+          example: martha-dev-v4
+        display_name:
+          type: string
+          description: Human-readable name
+          example: Martha Development v4
+        description:
+          type: string
+          description: Worktree description
+          example: Main development worktree for Martha AI assistant
+        path:
+          type: string
+          description: Filesystem path
+          example: /mnt/data/martha.dev-v4
+        github_repo:
+          type: string
+          nullable: true
+          description: GitHub repository URL
+          example: https://github.com/user/martha
+        boards:
+          type: array
+          items:
+            type: string
+          description: List of board IDs in this worktree
+          example: ["phase1-temporal-foundation", "phase2-agent-swarms"]
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-16T14:30:00Z"
+
+    Board:
+      type: object
+      required:
+        - id
+        - worktree_id
+        - name
+        - description
+        - version
+        - columns
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Unique board identifier (slug format)
+          example: phase1-temporal-foundation
+        worktree_id:
+          type: string
+          description: Parent worktree ID
+          example: martha-dev-v4
+        name:
+          type: string
+          description: Board name
+          example: Phase 1 - Temporal Foundation
+        description:
+          type: string
+          description: Board description
+          example: Core temporal workflow implementation
+        $schema:
+          type: string
+          nullable: true
+          description: JSON schema URL
+        version:
+          type: integer
+          description: Board version number
+          example: 1
+        sprint:
+          $ref: '#/components/schemas/Sprint'
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardColumn'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BoardColumn:
+      type: object
+      required:
+        - id
+        - name
+        - color
+        - issue_ids
+      properties:
+        id:
+          type: string
+          description: Column identifier
+          example: backlog
+        name:
+          type: string
+          description: Column display name
+          example: Backlog
+        color:
+          type: string
+          description: Hex color code
+          example: "#6B7280"
+        wip_limit:
+          type: integer
+          nullable: true
+          description: Work-in-progress limit
+          example: 5
+        issue_ids:
+          type: array
+          items:
+            type: string
+          description: Ordered list of issue IDs in this column
+          example: ["issue-001", "issue-002"]
+
+    Sprint:
+      type: object
+      nullable: true
+      required:
+        - id
+        - name
+        - start_date
+        - end_date
+      properties:
+        id:
+          type: string
+          example: sprint-2026-01
+        name:
+          type: string
+          example: January 2026 Sprint
+        start_date:
+          type: string
+          format: date
+          example: "2026-01-01"
+        end_date:
+          type: string
+          format: date
+          example: "2026-01-31"
+
+    Issue:
+      type: object
+      required:
+        - id
+        - worktree_id
+        - board_id
+        - type
+        - title
+        - description
+        - status
+        - priority
+        - labels
+        - documentation
+        - links
+        - metadata
+      properties:
+        id:
+          type: string
+          description: Unique issue identifier
+          example: issue-001
+        worktree_id:
+          type: string
+          description: Parent worktree ID
+          example: martha-dev-v4
+        board_id:
+          type: string
+          description: Parent board ID
+          example: phase1-temporal-foundation
+        type:
+          type: string
+          enum: [epic, story, task, bug]
+          description: Issue type
+          example: task
+        title:
+          type: string
+          description: Issue title
+          example: Implement temporal workflow engine
+        description:
+          type: string
+          description: Detailed issue description (markdown)
+          example: |
+            Build the core temporal workflow execution engine with support for:
+            - Activity scheduling
+            - Timer management
+            - Signal handling
+        status:
+          type: string
+          description: Current status (matches board column ID)
+          example: in-progress
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+          description: Issue priority
+          example: high
+        parent_id:
+          type: string
+          nullable: true
+          description: Parent issue ID (for subtasks under epics/stories)
+          example: epic-temporal-foundation
+        assignee:
+          $ref: '#/components/schemas/Assignee'
+        labels:
+          type: array
+          items:
+            type: string
+          description: Issue labels/tags
+          example: ["backend", "temporal", "high-priority"]
+        documentation:
+          $ref: '#/components/schemas/DocumentationLinks'
+        links:
+          $ref: '#/components/schemas/Links'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+
+    Assignee:
+      type: object
+      nullable: true
+      required:
+        - id
+        - name
+        - avatar
+      properties:
+        id:
+          type: string
+          example: user-123
+        name:
+          type: string
+          example: John Doe
+        avatar:
+          type: string
+          format: uri
+          example: https://avatar.example.com/user-123.png
+
+    DocumentationLinks:
+      type: object
+      required:
+        - overview
+        - technical_spec
+        - related_docs
+      properties:
+        overview:
+          type: string
+          nullable: true
+          description: Overview documentation ID
+          example: doc-temporal-overview
+        technical_spec:
+          type: string
+          nullable: true
+          description: Technical specification document ID
+          example: doc-temporal-spec
+        related_docs:
+          type: array
+          items:
+            type: string
+          description: Related documentation IDs
+          example: ["doc-workflow-guide", "doc-api-reference"]
+
+    Links:
+      type: object
+      required:
+        - pr
+        - related_issues
+        - external
+      properties:
+        pr:
+          type: string
+          nullable: true
+          description: Pull request URL
+          example: https://github.com/user/repo/pull/123
+        related_issues:
+          type: array
+          items:
+            type: string
+          description: Related issue IDs
+          example: ["issue-002", "issue-003"]
+        external:
+          type: array
+          items:
+            type: string
+          description: External links
+          example: ["https://docs.temporal.io/"]
+
+    Metadata:
+      type: object
+      required:
+        - created_at
+        - updated_at
+        - version
+      properties:
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-01-15T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-01-16T14:30:00Z"
+        version:
+          type: integer
+          description: Issue version (for optimistic locking)
+          example: 3
+
+    Documentation:
+      type: object
+      required:
+        - id
+        - worktree_id
+        - type
+        - title
+        - content
+        - tags
+        - links
+        - metadata
+      properties:
+        id:
+          type: string
+          example: doc-001
+        worktree_id:
+          type: string
+          example: martha-dev-v4
+        issue_id:
+          type: string
+          nullable: true
+          example: issue-001
+        epic_id:
+          type: string
+          nullable: true
+          example: epic-temporal
+        board_id:
+          type: string
+          nullable: true
+          example: phase1-temporal-foundation
+        type:
+          type: string
+          enum: [overview, technical_spec, api_reference, guide, troubleshooting]
+          example: technical_spec
+        title:
+          type: string
+          example: Temporal Workflow Engine Technical Specification
+        content:
+          type: string
+          description: Documentation content (markdown)
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["temporal", "workflow", "backend"]
+        links:
+          type: object
+          required:
+            - related_issues
+            - related_docs
+            - external_links
+          properties:
+            related_issues:
+              type: array
+              items:
+                type: string
+            related_docs:
+              type: array
+              items:
+                type: string
+            external_links:
+              type: array
+              items:
+                type: string
+        metadata:
+          type: object
+          required:
+            - created_at
+            - updated_at
+            - author
+            - version
+          properties:
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+            author:
+              type: string
+              example: john.doe
+            version:
+              type: integer
+
+    Comment:
+      type: object
+      required:
+        - id
+        - issue_id
+        - author
+        - content
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          example: comment-001
+        issue_id:
+          type: string
+          example: issue-001
+        author:
+          $ref: '#/components/schemas/Assignee'
+        content:
+          type: string
+          description: Comment text (markdown)
+          example: This looks good to me, approved!
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AgentSession:
+      type: object
+      required:
+        - session_id
+        - agent_type
+        - issue_id
+        - worktree
+        - started_at
+        - status
+        - progress
+        - current_task
+        - logs
+      properties:
+        session_id:
+          type: string
+          example: agent-session-123
+        agent_type:
+          type: string
+          enum: [coder, tester, reviewer, researcher, architect]
+          example: coder
+        issue_id:
+          type: string
+          example: issue-001
+        worktree:
+          type: string
+          example: martha-dev-v4
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [active, paused, completed, failed]
+          example: active
+        progress:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          example: 45.5
+        current_task:
+          type: string
+          example: Implementing workflow execution logic
+        logs:
+          type: array
+          items:
+            type: object
+            required:
+              - timestamp
+              - level
+              - message
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              level:
+                type: string
+                enum: [info, warn, error, debug]
+              message:
+                type: string
+        summary:
+          type: string
+          nullable: true
+          description: Summary of completed work
+
+    # Request/Response Wrappers
+
+    WorktreeListResponse:
+      type: object
+      required:
+        - worktrees
+        - count
+      properties:
+        worktrees:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorktreeConfig'
+        count:
+          type: integer
+          example: 3
+
+    BoardListResponse:
+      type: object
+      required:
+        - boards
+        - count
+      properties:
+        boards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Board'
+        count:
+          type: integer
+
+    IssueListResponse:
+      type: object
+      required:
+        - issues
+        - count
+      properties:
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+        count:
+          type: integer
+
+    CommentListResponse:
+      type: object
+      required:
+        - comments
+        - count
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        count:
+          type: integer
+
+    DocumentationListResponse:
+      type: object
+      required:
+        - documentation
+        - count
+      properties:
+        documentation:
+          type: array
+          items:
+            $ref: '#/components/schemas/Documentation'
+        count:
+          type: integer
+
+    AgentSessionListResponse:
+      type: object
+      required:
+        - sessions
+        - count
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentSession'
+        count:
+          type: integer
+
+    # Error Responses
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: NOT_FOUND
+        message:
+          type: string
+          example: Issue not found
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true
+
+paths:
+  # Worktrees API
+
+  /worktrees:
+    get:
+      tags:
+        - Worktrees
+      summary: List all worktrees
+      description: Retrieves all available worktrees with their configuration
+      operationId: listWorktrees
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeListResponse'
+              example:
+                worktrees:
+                  - id: martha-dev-v4
+                    name: martha-dev-v4
+                    display_name: Martha Development v4
+                    description: Main development worktree
+                    path: /mnt/data/martha.dev-v4
+                    github_repo: https://github.com/user/martha
+                    boards: ["phase1-temporal-foundation", "phase2-agent-swarms"]
+                    created_at: "2026-01-15T10:00:00Z"
+                    updated_at: "2026-01-16T14:30:00Z"
+                count: 1
+
+    post:
+      tags:
+        - Worktrees
+      summary: Create worktree
+      description: Creates a new worktree
+      operationId: createWorktree
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - name
+                - display_name
+                - description
+                - path
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                display_name:
+                  type: string
+                description:
+                  type: string
+                path:
+                  type: string
+                github_repo:
+                  type: string
+                  nullable: true
+            example:
+              id: new-project
+              name: new-project
+              display_name: New Project
+              description: A new project worktree
+              path: /mnt/data/new-project
+              github_repo: https://github.com/user/new-project
+      responses:
+        '201':
+          description: Worktree created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeConfig'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Worktree already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /worktrees/{worktreeId}:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: martha-dev-v4
+
+    get:
+      tags:
+        - Worktrees
+      summary: Get worktree details
+      description: Retrieves detailed information about a worktree
+      operationId: getWorktree
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/WorktreeConfig'
+                  - type: object
+                    properties:
+                      boards_detail:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Board'
+        '404':
+          description: Worktree not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      tags:
+        - Worktrees
+      summary: Update worktree
+      description: Updates worktree configuration
+      operationId: updateWorktree
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                description:
+                  type: string
+                github_repo:
+                  type: string
+            example:
+              display_name: Martha Development v4 (Updated)
+      responses:
+        '200':
+          description: Worktree updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorktreeConfig'
+        '404':
+          description: Worktree not found
+
+    delete:
+      tags:
+        - Worktrees
+      summary: Delete worktree
+      description: Deletes a worktree and all its boards and issues
+      operationId: deleteWorktree
+      responses:
+        '204':
+          description: Worktree deleted
+        '404':
+          description: Worktree not found
+
+  # Boards API
+
+  /worktrees/{worktreeId}/boards:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Boards
+      summary: List boards in worktree
+      description: Retrieves all boards in a worktree
+      operationId: listBoards
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardListResponse'
+
+    post:
+      tags:
+        - Boards
+      summary: Create board
+      description: Creates a new board in the worktree
+      operationId: createBoard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - name
+                - description
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                description:
+                  type: string
+                columns:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/BoardColumn'
+            example:
+              id: new-board
+              name: New Board
+              description: A new kanban board
+              columns:
+                - id: backlog
+                  name: Backlog
+                  color: "#6B7280"
+                  wip_limit: null
+                  issue_ids: []
+                - id: in-progress
+                  name: In Progress
+                  color: "#3B82F6"
+                  wip_limit: 5
+                  issue_ids: []
+                - id: done
+                  name: Done
+                  color: "#10B981"
+                  wip_limit: null
+                  issue_ids: []
+      responses:
+        '201':
+          description: Board created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+        '400':
+          description: Invalid request
+        '409':
+          description: Board already exists
+
+  /worktrees/{worktreeId}/boards/{boardId}:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: boardId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Boards
+      summary: Get board state
+      description: Retrieves complete board state including all columns and issue IDs
+      operationId: getBoard
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+        '404':
+          description: Board not found
+
+    patch:
+      tags:
+        - Boards
+      summary: Update board
+      description: Updates board configuration
+      operationId: updateBoard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                columns:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/BoardColumn'
+      responses:
+        '200':
+          description: Board updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+        '404':
+          description: Board not found
+
+    delete:
+      tags:
+        - Boards
+      summary: Delete board
+      description: Deletes a board and all its issues
+      operationId: deleteBoard
+      responses:
+        '204':
+          description: Board deleted
+        '404':
+          description: Board not found
+
+  # Hierarchical Issues API
+
+  /worktrees/{worktreeId}/boards/{boardId}/issues:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: boardId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Issues (Hierarchical)
+      summary: List issues in board
+      description: Retrieves all issues in a board with optional filtering
+      operationId: listIssuesHierarchical
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: Filter by status
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [epic, story, task, bug]
+          description: Filter by type
+        - name: parent_id
+          in: query
+          schema:
+            type: string
+          description: Filter by parent issue ID
+        - name: assignee
+          in: query
+          schema:
+            type: string
+          description: Filter by assignee ID
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueListResponse'
+
+    post:
+      tags:
+        - Issues (Hierarchical)
+      summary: Create issue
+      description: Creates a new issue in the board
+      operationId: createIssueHierarchical
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                type:
+                  type: string
+                  enum: [epic, story, task, bug]
+                  default: task
+                status:
+                  type: string
+                  default: backlog
+                parent_id:
+                  type: string
+                  nullable: true
+                description:
+                  type: string
+                  default: ""
+                labels:
+                  type: array
+                  items:
+                    type: string
+                  default: []
+                priority:
+                  type: string
+                  enum: [critical, high, medium, low]
+                  default: medium
+            example:
+              title: Implement workflow execution engine
+              type: task
+              status: backlog
+              parent_id: null
+              description: Build the core workflow execution logic
+              labels: ["backend", "temporal"]
+              priority: high
+      responses:
+        '201':
+          description: Issue created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400':
+          description: Invalid request
+
+  /worktrees/{worktreeId}/boards/{boardId}/issues/{issueId}:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: boardId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: issueId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Issues (Hierarchical)
+      summary: Get issue
+      description: Retrieves a specific issue
+      operationId: getIssueHierarchical
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '404':
+          description: Issue not found
+
+    patch:
+      tags:
+        - Issues (Hierarchical)
+      summary: Update issue
+      description: Updates issue fields
+      operationId: updateIssueHierarchical
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                status:
+                  type: string
+                priority:
+                  type: string
+                  enum: [critical, high, medium, low]
+                labels:
+                  type: array
+                  items:
+                    type: string
+                assignee:
+                  $ref: '#/components/schemas/Assignee'
+            example:
+              title: Implement workflow execution engine (updated)
+              priority: critical
+      responses:
+        '200':
+          description: Issue updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '404':
+          description: Issue not found
+
+    delete:
+      tags:
+        - Issues (Hierarchical)
+      summary: Delete issue
+      description: Deletes an issue
+      operationId: deleteIssueHierarchical
+      responses:
+        '204':
+          description: Issue deleted
+        '404':
+          description: Issue not found
+
+  /worktrees/{worktreeId}/boards/{boardId}/issues/{issueId}/move:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: boardId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: issueId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      tags:
+        - Issues (Hierarchical)
+      summary: Move issue
+      description: Moves an issue to a different status/column
+      operationId: moveIssueHierarchical
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  description: New status (column ID)
+                index:
+                  type: integer
+                  description: Position in the new column (optional)
+            example:
+              status: in-progress
+              index: 2
+      responses:
+        '200':
+          description: Issue moved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '404':
+          description: Issue not found
+
+  # Legacy Issues API (Backward Compatible)
+
+  /board/default:
+    get:
+      tags:
+        - Issues (Legacy)
+      summary: Get default board
+      description: Legacy endpoint - retrieves the default board
+      operationId: getDefaultBoard
+      deprecated: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+
+  /board/{boardId}:
+    parameters:
+      - name: boardId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Issues (Legacy)
+      summary: Get board by ID
+      description: Legacy endpoint - retrieves a board by ID
+      operationId: getBoardLegacy
+      deprecated: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+
+  /issues:
+    get:
+      tags:
+        - Issues (Legacy)
+      summary: List all issues
+      description: Legacy endpoint - lists all issues across all boards
+      operationId: listIssuesLegacy
+      deprecated: true
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: parent_id
+          in: query
+          schema:
+            type: string
+        - name: assignee
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueListResponse'
+
+    post:
+      tags:
+        - Issues (Legacy)
+      summary: Create issue
+      description: Legacy endpoint - creates an issue in the default board
+      operationId: createIssueLegacy
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                type:
+                  type: string
+                status:
+                  type: string
+                parent_id:
+                  type: string
+                description:
+                  type: string
+                labels:
+                  type: array
+                  items:
+                    type: string
+                priority:
+                  type: string
+      responses:
+        '201':
+          description: Issue created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+
+  /issues/{issueId}:
+    parameters:
+      - name: issueId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Issues (Legacy)
+      summary: Get issue
+      description: Legacy endpoint - retrieves an issue
+      operationId: getIssueLegacy
+      deprecated: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+
+    patch:
+      tags:
+        - Issues (Legacy)
+      summary: Update issue
+      description: Legacy endpoint - updates an issue
+      operationId: updateIssueLegacy
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Issue updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+
+    delete:
+      tags:
+        - Issues (Legacy)
+      summary: Delete issue
+      description: Legacy endpoint - deletes an issue
+      operationId: deleteIssueLegacy
+      deprecated: true
+      responses:
+        '204':
+          description: Issue deleted
+
+  /issues/{issueId}/move:
+    parameters:
+      - name: issueId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      tags:
+        - Issues (Legacy)
+      summary: Move issue
+      description: Legacy endpoint - moves an issue
+      operationId: moveIssueLegacy
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                index:
+                  type: integer
+      responses:
+        '200':
+          description: Issue moved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+
+  # Comments API
+
+  /issues/{issueId}/comments:
+    parameters:
+      - name: issueId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Comments
+      summary: List comments
+      description: Retrieves all comments for an issue
+      operationId: listComments
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentListResponse'
+
+    post:
+      tags:
+        - Comments
+      summary: Create comment
+      description: Creates a new comment on an issue
+      operationId: createComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+                - author
+              properties:
+                text:
+                  type: string
+                  description: Comment text (markdown)
+                author:
+                  $ref: '#/components/schemas/Assignee'
+            example:
+              text: Looks good to me!
+              author:
+                id: user-123
+                name: John Doe
+                avatar: https://avatar.example.com/user-123.png
+      responses:
+        '201':
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+
+  /comments/{commentId}:
+    parameters:
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: issue_id
+        in: query
+        required: true
+        schema:
+          type: string
+
+    patch:
+      tags:
+        - Comments
+      summary: Update comment
+      description: Updates a comment's text
+      operationId: updateComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+              properties:
+                text:
+                  type: string
+      responses:
+        '200':
+          description: Comment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+
+    delete:
+      tags:
+        - Comments
+      summary: Delete comment
+      description: Deletes a comment
+      operationId: deleteComment
+      responses:
+        '204':
+          description: Comment deleted
+
+  # Documentation API
+
+  /worktrees/{worktreeId}/documentation:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Documentation
+      summary: List documentation
+      description: Retrieves all documentation in a worktree
+      operationId: listDocumentation
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search query
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentationListResponse'
+
+    post:
+      tags:
+        - Documentation
+      summary: Create documentation
+      description: Creates new documentation
+      operationId: createDocumentation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - title
+                - content
+                - author
+              properties:
+                issue_id:
+                  type: string
+                epic_id:
+                  type: string
+                board_id:
+                  type: string
+                type:
+                  type: string
+                  enum: [overview, technical_spec, api_reference, guide, troubleshooting]
+                title:
+                  type: string
+                content:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+                author:
+                  type: string
+      responses:
+        '201':
+          description: Documentation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Documentation'
+
+  /worktrees/{worktreeId}/documentation/{docId}:
+    parameters:
+      - name: worktreeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: docId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Documentation
+      summary: Get documentation
+      description: Retrieves a documentation document
+      operationId: getDocumentation
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Documentation'
+
+    patch:
+      tags:
+        - Documentation
+      summary: Update documentation
+      description: Updates documentation content or metadata
+      operationId: updateDocumentation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Documentation updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Documentation'
+
+    delete:
+      tags:
+        - Documentation
+      summary: Delete documentation
+      description: Deletes a documentation document
+      operationId: deleteDocumentation
+      responses:
+        '204':
+          description: Documentation deleted
+
+  # Agent Sessions API
+
+  /agents/sessions:
+    get:
+      tags:
+        - Agents
+      summary: List active sessions
+      description: Retrieves all active agent sessions
+      operationId: listAgentSessions
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSessionListResponse'
+
+    post:
+      tags:
+        - Agents
+      summary: Start agent session
+      description: Starts a new agent session for an issue
+      operationId: startAgentSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - agent_type
+                - issue_id
+                - worktree
+                - initial_task
+              properties:
+                agent_type:
+                  type: string
+                  enum: [coder, tester, reviewer, researcher, architect]
+                issue_id:
+                  type: string
+                worktree:
+                  type: string
+                initial_task:
+                  type: string
+            example:
+              agent_type: coder
+              issue_id: issue-001
+              worktree: martha-dev-v4
+              initial_task: Implement workflow execution engine
+      responses:
+        '201':
+          description: Agent session started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSession'
+
+  /agents/sessions/{sessionId}:
+    parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Agents
+      summary: Get agent session
+      description: Retrieves agent session details
+      operationId: getAgentSession
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSession'
+
+    patch:
+      tags:
+        - Agents
+      summary: Update agent session
+      description: Updates agent session progress or status
+      operationId: updateAgentSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                progress:
+                  type: number
+                current_task:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, paused]
+      responses:
+        '200':
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSession'
+
+  /agents/sessions/{sessionId}/end:
+    parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      tags:
+        - Agents
+      summary: End agent session
+      description: Ends an agent session with a final status
+      operationId: endAgentSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [completed, failed]
+                summary:
+                  type: string
+                  description: Summary of work completed
+            example:
+              status: completed
+              summary: Successfully implemented workflow execution engine
+      responses:
+        '200':
+          description: Session ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSession'
+
+  # Authentication API
+
+  /auth/status:
+    get:
+      tags:
+        - Authentication
+      summary: Get auth status
+      description: Checks authentication status
+      operationId: getAuthStatus
+      responses:
+        '200':
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - authenticated
+                properties:
+                  authenticated:
+                    type: boolean
+                  user:
+                    $ref: '#/components/schemas/Assignee'
+              example:
+                authenticated: true
+                user:
+                  id: user-123
+                  name: John Doe
+                  avatar: https://avatar.example.com/user-123.png
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout
+      description: Logs out the current user
+      operationId: logout
+      responses:
+        '204':
+          description: Logged out

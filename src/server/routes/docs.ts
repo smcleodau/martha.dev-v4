@@ -11,6 +11,8 @@ const logger = createLogger({ module: 'docs' });
 
 export async function docsRoutes(fastify: FastifyInstance) {
   const docsPath = join(__dirname, '../../../../docs');
+  const trackerDocsPath = join(docsPath, 'tracker');
+  const apiDocsPath = join(docsPath, 'api');
 
   // Get list of available docs
   fastify.get('/api/v1/docs', async (_request: FastifyRequest, reply: FastifyReply) => {
@@ -36,6 +38,25 @@ export async function docsRoutes(fastify: FastifyInstance) {
     const { docId } = request.params as { docId: string };
 
     try {
+      // Handle tracker documentation
+      if (docId.startsWith('tracker-')) {
+        const trackerDocName = docId.replace('tracker-', '');
+        const trackerFilePath = join(trackerDocsPath, `${trackerDocName}.md`);
+
+        try {
+          await fs.access(trackerFilePath);
+          const content = await fs.readFile(trackerFilePath, 'utf-8');
+
+          return reply.send({
+            id: docId,
+            filename: `${trackerDocName}.md`,
+            content,
+          });
+        } catch {
+          return reply.code(404).send({ error: 'Tracker documentation file not found' });
+        }
+      }
+
       // Convert docId to filename (handle both lowercase and uppercase)
       const files = await fs.readdir(docsPath);
       const matchingFile = files.find(f =>
@@ -56,6 +77,21 @@ export async function docsRoutes(fastify: FastifyInstance) {
     } catch (error) {
       logger.error('Failed to read doc', { error, docId });
       return reply.code(500).send({ error: 'Failed to read documentation file' });
+    }
+  });
+
+  // Serve OpenAPI specification
+  fastify.get('/api/v1/docs/tracker-openapi', async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const yamlPath = join(apiDocsPath, 'tracker-openapi.yaml');
+      const yaml = await fs.readFile(yamlPath, 'utf-8');
+
+      return reply
+        .type('application/x-yaml')
+        .send(yaml);
+    } catch (error) {
+      logger.error('Failed to read OpenAPI spec', { error });
+      return reply.code(500).send({ error: 'Failed to read OpenAPI specification' });
     }
   });
 }

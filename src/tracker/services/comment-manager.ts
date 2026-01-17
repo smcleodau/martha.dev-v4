@@ -115,7 +115,7 @@ export function createComment(issueId: string, author: Assignee, content: string
  * @returns Array of comments
  */
 export function listComments(issueId: string): Comment[] {
-  const commentsDir = getCommentsDir(issueId);
+  const commentsDir = getCommentsDirLegacy(issueId);
   const files = listFiles(commentsDir, '.json');
 
   const comments = files.map((file) => {
@@ -137,7 +137,7 @@ export function listComments(issueId: string): Comment[] {
  */
 export function getComment(issueId: string, commentId: string): Comment | null {
   try {
-    const commentPath = getCommentPath(issueId, commentId);
+    const commentPath = getCommentPathLegacy(issueId, commentId);
     return readJsonSync<Comment>(commentPath);
   } catch {
     return null;
@@ -162,7 +162,7 @@ export function updateComment(
   comment.content = content;
   comment.updated_at = new Date().toISOString();
 
-  const commentPath = getCommentPath(issueId, commentId);
+  const commentPath = getCommentPathLegacy(issueId, commentId);
   writeJsonSync(commentPath, comment);
 
   return comment;
@@ -175,7 +175,7 @@ export function updateComment(
  * @returns true if deleted, false if not found
  */
 export function deleteComment(issueId: string, commentId: string): boolean {
-  const commentPath = getCommentPath(issueId, commentId);
+  const commentPath = getCommentPathLegacy(issueId, commentId);
   try {
     deleteFile(commentPath);
     return true;
@@ -189,7 +189,7 @@ export function deleteComment(issueId: string, commentId: string): boolean {
  * @param issueId Issue ID
  */
 export function deleteAllComments(issueId: string): void {
-  const commentsDir = getCommentsDir(issueId);
+  const commentsDir = getCommentsDirLegacy(issueId);
   const files = listFiles(commentsDir, '.json');
 
   files.forEach((file) => {

@@ -56,14 +56,12 @@ export function createWorktree(data: {
   path: string;
   github_repo?: string;
 }): WorktreeConfig {
-  const configPath = getWorktreePath(data.id, 'config.json');
-
-  if (fileExists(configPath)) {
-    throw new Error(`Worktree already exists: ${data.id}`);
-  }
+  // Use provided human-readable ID
+  const worktreeId = data.id;
+  const configPath = getWorktreePath(worktreeId, 'config.json');
 
   const config: WorktreeConfig = {
-    id: data.id,
+    id: worktreeId,
     name: data.name,
     display_name: data.display_name,
     description: data.description,
@@ -75,19 +73,20 @@ export function createWorktree(data: {
   };
 
   // Create worktree directory structure
-  ensureDir(getWorktreePath(data.id, 'boards'));
-  ensureDir(getWorktreePath(data.id, 'comments'));
-  ensureDir(getWorktreePath(data.id, 'documentation'));
-  ensureDir(getWorktreePath(data.id, 'agents'));
+  ensureDir(getWorktreePath(worktreeId, 'boards'));
+  ensureDir(getWorktreePath(worktreeId, 'comments'));
+  ensureDir(getWorktreePath(worktreeId, 'documentation'));
+  ensureDir(getWorktreePath(worktreeId, 'agents'));
+  ensureDir(getWorktreePath(worktreeId, 'activity'));
 
   // Save config
   saveWorktree(config);
 
   // Create empty index
-  const indexPath = getWorktreePath(data.id, 'index.json');
+  const indexPath = getWorktreePath(worktreeId, 'index.json');
   writeJsonSync(indexPath, {
     $schema: 'https://martha.dev/schemas/tracker/index.json',
-    worktree_id: data.id,
+    worktree_id: worktreeId,
     version: 1,
     count: 0,
     next_id: 1,

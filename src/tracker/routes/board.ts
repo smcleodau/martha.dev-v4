@@ -87,29 +87,23 @@ export const hierarchicalBoardRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Params: { worktreeId: string };
     Body: {
-      id: string;
       name: string;
       description: string;
       columns?: BoardColumn[];
     };
   }>('/', async (request, reply) => {
     try {
-      const { id, name, description, columns } = request.body;
+      const { name, description, columns } = request.body;
 
       // Validate required fields
-      if (!id || !name || !description) {
+      if (!name || !description) {
         return reply.status(400).send({
-          error: 'Missing required fields: id, name, description',
+          error: 'Missing required fields: name, description',
         });
       }
 
-      // Check if board already exists
-      if (boardExists(request.params.worktreeId, id)) {
-        return reply.status(409).send({ error: 'Board already exists' });
-      }
-
+      // ID is auto-generated - no need to check for conflicts
       const board = createBoard(request.params.worktreeId, {
-        id,
         name,
         description,
         columns,

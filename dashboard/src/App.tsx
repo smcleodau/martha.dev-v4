@@ -4,6 +4,7 @@ import OverviewPage from './pages/OverviewPage';
 import { TrackerPage } from './pages/TrackerPage';
 import LogsPage from './pages/LogsPage';
 import DocumentationPage from './pages/DocumentationPage';
+import TrackerApiPage from './pages/TrackerApiPage';
 import SettingsPage from './pages/SettingsPage';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
           <Route path="/logs" element={<LogsPage />} />
           <Route path="/docs" element={<DocumentationPage />} />
           <Route path="/docs/:docId" element={<DocumentationPage />} />
+          <Route path="/docs/tracker-api-explorer" element={<TrackerApiPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Layout>

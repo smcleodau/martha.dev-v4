@@ -16,6 +16,7 @@ import {
 } from './file-storage.js';
 import type { BoardState, BoardColumn } from '../types.js';
 import { addBoardToWorktree, removeBoardFromWorktree } from './worktree-manager.js';
+import { generateBoardId } from './id-generator.js';
 
 /**
  * Load the board state from disk
@@ -55,20 +56,17 @@ export function saveBoard(worktreeId: string, boardId: string, board: BoardState
 export function createBoard(
   worktreeId: string,
   data: {
-    id: string;
     name: string;
     description: string;
     columns?: BoardColumn[];
   }
 ): BoardState {
-  const boardPath = getBoardPath(worktreeId, data.id, 'state.json');
-
-  if (fileExists(boardPath)) {
-    throw new Error(`Board already exists: ${worktreeId}/${data.id}`);
-  }
+  // Generate random board ID
+  const boardId = generateBoardId();
+  const boardPath = getBoardPath(worktreeId, boardId, 'state.json');
 
   // Create board directory structure
-  ensureDir(getBoardPath(worktreeId, data.id, 'issues'));
+  ensureDir(getBoardPath(worktreeId, boardId, 'issues'));
 
   // Default columns if not provided
   const defaultColumns: BoardColumn[] = [
@@ -81,7 +79,7 @@ export function createBoard(
 
   const board: BoardState = {
     $schema: 'https://martha.dev/schemas/tracker/board.json',
-    id: data.id,
+    id: boardId,
     worktree_id: worktreeId,
     name: data.name,
     description: data.description,
@@ -93,10 +91,10 @@ export function createBoard(
   };
 
   // Save board
-  saveBoard(worktreeId, data.id, board);
+  saveBoard(worktreeId, boardId, board);
 
   // Add board to worktree's board list
-  addBoardToWorktree(worktreeId, data.id);
+  addBoardToWorktree(worktreeId, boardId);
 
   return board;
 }

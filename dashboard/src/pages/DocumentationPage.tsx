@@ -28,6 +28,13 @@ const documentList: DocItem[] = [
     category: 'start',
     emoji: '🎯'
   },
+  {
+    id: 'tracker-user-guide',
+    title: 'Tracker User Guide',
+    description: "How to use the kanban board, filters, and issue management",
+    category: 'start',
+    emoji: '📋'
+  },
 
   // REFERENCE - When you need specifics
   {
@@ -36,6 +43,20 @@ const documentList: DocItem[] = [
     description: "REST endpoints, WebSocket events, curl examples",
     category: 'reference',
     emoji: '📡'
+  },
+  {
+    id: 'tracker-api',
+    title: 'Tracker API Reference',
+    description: "Complete REST API documentation for worktrees, boards, and issues",
+    category: 'reference',
+    emoji: '🔌'
+  },
+  {
+    id: 'tracker-api-explorer',
+    title: 'Tracker API Explorer',
+    description: "Interactive API documentation with live examples (Swagger UI)",
+    category: 'reference',
+    emoji: '🧪'
   },
   {
     id: 'installation',
@@ -52,6 +73,20 @@ const documentList: DocItem[] = [
     description: "How Martha works under the hood",
     category: 'technical',
     emoji: '🏗️'
+  },
+  {
+    id: 'tracker-overview',
+    title: 'Tracker Architecture',
+    description: "How the multi-board tracker system works",
+    category: 'technical',
+    emoji: '🏗️'
+  },
+  {
+    id: 'tracker-components',
+    title: 'Tracker Components',
+    description: "Frontend component documentation for developers",
+    category: 'technical',
+    emoji: '⚛️'
   },
   {
     id: 'port_allocation',

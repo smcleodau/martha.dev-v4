@@ -69,6 +69,11 @@ export interface Links {
   external: string[];
 }
 
+export interface QualityInfo {
+  coverage: number;
+  checklist: string[];
+}
+
 export interface Issue {
   id: string;
   worktree_id: string;
@@ -85,6 +90,7 @@ export interface Issue {
     avatar: string;
   } | null;
   labels: string[];
+  quality: QualityInfo;
   documentation: DocumentationLinks;
   links: Links;
   metadata: {
@@ -570,6 +576,47 @@ export const hierarchicalIssuesApi = {
       method: 'POST',
       body: JSON.stringify({ status, index }),
     });
+  },
+};
+
+// Activity API
+export interface ActivityEntry {
+  id: string;
+  issue_id: string;
+  timestamp: string;
+  actor: {
+    id: string;
+    name: string;
+  };
+  action: 'created' | 'updated' | 'commented' | 'linked' | 'status_changed' | 'assigned';
+  changes?: Array<{
+    field: string;
+    old_value: any;
+    new_value: any;
+  }>;
+  metadata?: Record<string, any>;
+}
+
+export const activityApi = {
+  getActivity: async (
+    worktreeId: string,
+    issueId: string,
+    limit?: number
+  ): Promise<ActivityEntry[]> => {
+    const params = limit ? `?limit=${limit}` : '';
+    return request<ActivityEntry[]>(
+      `/worktrees/${worktreeId}/issues/${issueId}/activity${params}`
+    );
+  },
+
+  getActivitySince: async (
+    worktreeId: string,
+    issueId: string,
+    since: string
+  ): Promise<ActivityEntry[]> => {
+    return request<ActivityEntry[]>(
+      `/worktrees/${worktreeId}/issues/${issueId}/activity?since=${since}`
+    );
   },
 };
 

@@ -5,10 +5,17 @@
  * Can be started standalone or integrated into the main application.
  */
 
+import { config } from 'dotenv';
+
+// Load environment variables first
+config({ path: '.env.local' });
+
 import { Worker, NativeConnection } from '@temporalio/worker';
-import { temporalConfig } from './config.js';
+import { loadTemporalConfig } from './config.js';
 import logger from '../utils/logger.js';
 import * as activities from '../activities/issue-activities.js';
+import * as fs from 'fs';
+import { sinks } from './telemetry-sink.js';
 
 let worker: Worker | null = null;
 
@@ -22,6 +29,9 @@ export async function startWorker(): Promise<Worker> {
   }
 
   try {
+    // Load config after dotenv has run
+    const temporalConfig = loadTemporalConfig();
+
     logger.info(
       {
         address: temporalConfig.address,
@@ -31,9 +41,21 @@ export async function startWorker(): Promise<Worker> {
       'Starting Temporal worker'
     );
 
-    const connection = await NativeConnection.connect({
+    // Configure connection for Temporal Cloud or local
+    const isCloud = temporalConfig.address.includes('.tmprl.cloud') ||
+                    temporalConfig.address.includes('.api.temporal.io');
+    const connectionOptions: any = {
       address: temporalConfig.address,
-    });
+    };
+
+    if (isCloud && process.env.TEMPORAL_API_KEY) {
+      // Temporal Cloud with API key authentication (regional endpoint)
+      logger.info('Connecting to Temporal Cloud with API key');
+      connectionOptions.apiKey = process.env.TEMPORAL_API_KEY;
+      connectionOptions.tls = {}; // Enable TLS for API key authentication
+    }
+
+    const connection = await NativeConnection.connect(connectionOptions);
 
     worker = await Worker.create({
       connection,
@@ -45,14 +67,29 @@ export async function startWorker(): Promise<Worker> {
         temporalConfig.maxConcurrentWorkflowExecutions,
       maxConcurrentActivityTaskExecutions:
         temporalConfig.maxConcurrentActivityExecutions,
+      // Register telemetry interceptor for automatic event capture
+      interceptors: {
+        workflowModules: [new URL('./telemetry-interceptor.js', import.meta.url).pathname],
+      },
+      // Register telemetry sinks for workflow-safe event writing
+      sinks,
     });
 
     logger.info('Temporal worker created, starting run loop');
     await worker.run();
 
     return worker;
-  } catch (error) {
-    logger.error({ error }, 'Failed to start Temporal worker');
+  } catch (error: any) {
+    logger.error(
+      {
+        error: error.message,
+        stack: error.stack,
+        code: error.code,
+        details: error.details
+      },
+      'Failed to start Temporal worker'
+    );
+    console.error('Worker connection error:', error);
     throw error;
   }
 }

@@ -34,8 +34,52 @@ import {
   setHandler,
   condition,
   sleep,
+  proxySinks,
+  workflowInfo,
 } from '@temporalio/workflow';
 import type * as activities from '../activities/issue-activities.js';
+
+// Telemetry sink for stage transition events
+interface TelemetrySinks {
+  telemetry: {
+    writeEvent(event: {
+      eventType: string;
+      eventCategory: string;
+      workflowId: string;
+      workflowType: string;
+      payload?: Record<string, unknown>;
+      source: string;
+    }): void;
+  };
+}
+
+const { telemetry } = proxySinks<TelemetrySinks>();
+
+/**
+ * Helper to write stage transition events
+ */
+function logStageTransition(
+  fromStage: Stage,
+  toStage: Stage,
+  issueId: string,
+  reason?: string
+): void {
+  const info = workflowInfo();
+  telemetry.writeEvent({
+    eventType: 'stage_transitioned',
+    eventCategory: 'workflow',
+    workflowId: info.workflowId,
+    workflowType: info.workflowType,
+    payload: {
+      fromStage,
+      toStage,
+      issueId,
+      reason,
+      timestamp: Date.now(),
+    },
+    source: 'temporal',
+  });
+}
 
 // Proxy activities with retry policies
 const {
@@ -171,6 +215,22 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     state.agentId = agentId;
     agentStarted = true;
     addHistory(state, 'Agent started', { agentId, startTime });
+
+    // Log signal handling
+    const info = workflowInfo();
+    telemetry.writeEvent({
+      eventType: 'agent_started_handled',
+      eventCategory: 'signal',
+      workflowId: info.workflowId,
+      workflowType: info.workflowType,
+      payload: {
+        issueId: issue.id,
+        agentId,
+        stage: state.stage,
+        startTime,
+      },
+      source: 'temporal',
+    });
   });
 
   setHandler(commitMadeSignal, ({ sha, message, files }) => {
@@ -188,29 +248,114 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     }
 
     addHistory(state, 'Commit made', { sha, message, filesCount: files.length });
+
+    // Log signal handling
+    const info = workflowInfo();
+    telemetry.writeEvent({
+      eventType: 'commit_made_handled',
+      eventCategory: 'signal',
+      workflowId: info.workflowId,
+      workflowType: info.workflowType,
+      payload: {
+        issueId: issue.id,
+        sha,
+        commitMessage: message,
+        filesCount: files.length,
+        totalCommits: state.metrics.totalCommits,
+        stage: state.stage,
+        isFirstCommit: state.metrics.totalCommits === 1,
+      },
+      source: 'temporal',
+    });
   });
 
   setHandler(agentCompletedSignal, ({ agentId, duration }) => {
     agentCompleted = true;
     state.metrics.developmentDuration = duration;
     addHistory(state, 'Agent completed', { agentId, duration });
+
+    // Log signal handling
+    const info = workflowInfo();
+    telemetry.writeEvent({
+      eventType: 'agent_completed_handled',
+      eventCategory: 'signal',
+      workflowId: info.workflowId,
+      workflowType: info.workflowType,
+      payload: {
+        issueId: issue.id,
+        agentId,
+        duration,
+        totalCommits: state.metrics.totalCommits,
+        stage: state.stage,
+      },
+      source: 'temporal',
+    });
   });
 
   setHandler(testResultsSignal, ({ passed, failed, evidence }) => {
     state.testResults = { passed, failed, evidence };
     testsCompleted = true;
     addHistory(state, 'Tests completed', { passed, failed });
+
+    // Log signal handling
+    const info = workflowInfo();
+    telemetry.writeEvent({
+      eventType: 'test_results_handled',
+      eventCategory: 'signal',
+      workflowId: info.workflowId,
+      workflowType: info.workflowType,
+      payload: {
+        issueId: issue.id,
+        passed,
+        failed,
+        testsPassed: failed === 0,
+        evidenceLength: evidence?.length || 0,
+        stage: state.stage,
+      },
+      source: 'temporal',
+    });
   });
 
   setHandler(reviewApprovedSignal, () => {
     reviewApproved = true;
     addHistory(state, 'Review approved', {});
+
+    // Log signal handling
+    const info = workflowInfo();
+    telemetry.writeEvent({
+      eventType: 'review_approved_handled',
+      eventCategory: 'signal',
+      workflowId: info.workflowId,
+      workflowType: info.workflowType,
+      payload: {
+        issueId: issue.id,
+        stage: state.stage,
+        reviewDuration: state.metrics.reviewDuration,
+      },
+      source: 'temporal',
+    });
   });
 
   setHandler(blockSignal, ({ reason }) => {
     state.blocked = true;
     state.blockReason = reason;
     addHistory(state, 'Workflow blocked', { reason });
+
+    // Log signal handling
+    const info = workflowInfo();
+    telemetry.writeEvent({
+      eventType: 'workflow_blocked_handled',
+      eventCategory: 'signal',
+      workflowId: info.workflowId,
+      workflowType: info.workflowType,
+      payload: {
+        issueId: issue.id,
+        reason,
+        stage: state.stage,
+        totalCommits: state.metrics.totalCommits,
+      },
+      source: 'temporal',
+    });
   });
 
   // Query handlers
@@ -221,7 +366,9 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
   // Main workflow execution with SAGA compensation
   try {
     // ===== Stage 1: Preparation =====
+    const previousStage = state.stage;
     state.stage = Stage.PREPARATION;
+    logStageTransition(previousStage, Stage.PREPARATION, issue.id, 'Workflow started');
     addHistory(state, 'Started preparation stage', {});
 
     const prepResult = await prepareIssue({
@@ -234,6 +381,7 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     addHistory(state, 'Issue prepared', { branch: prepResult.branch });
 
     // ===== Stage 2: Agent Spawn =====
+    logStageTransition(state.stage, Stage.SPAWN, issue.id, 'Preparation completed');
     state.stage = Stage.SPAWN;
     addHistory(state, 'Started spawn stage', {});
 
@@ -254,6 +402,7 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     }
 
     // ===== Stage 3: Development Monitoring =====
+    logStageTransition(state.stage, Stage.DEVELOPMENT, issue.id, 'Agent started');
     state.stage = Stage.DEVELOPMENT;
     addHistory(state, 'Started development stage', {});
 
@@ -275,6 +424,7 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     }
 
     // ===== Stage 4: Testing =====
+    logStageTransition(state.stage, Stage.TESTING, issue.id, 'Development completed');
     state.stage = Stage.TESTING;
     addHistory(state, 'Started testing stage', {});
 
@@ -309,6 +459,7 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     addHistory(state, 'Tests passed', { passed: state.testResults?.passed });
 
     // ===== Stage 5: Review =====
+    logStageTransition(state.stage, Stage.REVIEW, issue.id, 'Tests passed');
     state.stage = Stage.REVIEW;
     addHistory(state, 'Started review stage', {});
 
@@ -332,6 +483,7 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     addHistory(state, 'Review approved', {});
 
     // ===== Stage 6: Merge =====
+    logStageTransition(state.stage, Stage.MERGE, issue.id, 'Review approved');
     state.stage = Stage.MERGE;
     addHistory(state, 'Started merge stage', {});
 
@@ -344,6 +496,7 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     addHistory(state, 'Code merged', { mergeSha: mergeResult.mergeSha });
 
     // ===== Stage 7: Completion =====
+    logStageTransition(state.stage, Stage.COMPLETION, issue.id, 'Code merged');
     state.stage = Stage.COMPLETION;
     addHistory(state, 'Started completion stage', {});
 
@@ -363,6 +516,8 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     addHistory(state, 'Workflow completed successfully', { totalDuration });
   } catch (error: any) {
     // SAGA Compensation
+    const failedFromStage = state.stage;
+    logStageTransition(state.stage, Stage.FAILED, issue.id, error.message);
     state.stage = Stage.FAILED;
     addHistory(state, 'Workflow failed', { error: error.message });
 

@@ -18,9 +18,27 @@ import {
   setHandler,
   startChild,
   ChildWorkflowHandle,
+  proxySinks,
+  workflowInfo,
 } from '@temporalio/workflow';
 import type { IssueLifecycleWorkflow, IssueInput } from './IssueLifecycleWorkflow.js';
 import type * as activities from '../activities/issue-activities.js';
+
+// Telemetry sink for batch coordination events
+interface TelemetrySinks {
+  telemetry: {
+    writeEvent(event: {
+      eventType: string;
+      eventCategory: string;
+      workflowId: string;
+      workflowType: string;
+      payload?: Record<string, unknown>;
+      source: string;
+    }): void;
+  };
+}
+
+const { telemetry } = proxySinks<TelemetrySinks>();
 
 // Proxy activities
 const {} = proxyActivities<typeof activities>({
@@ -106,6 +124,21 @@ export async function BatchCoordinatorWorkflow(
     startTime: Date.now(),
   };
 
+  // Log batch workflow start
+  const info = workflowInfo();
+  telemetry.writeEvent({
+    eventType: 'batch_workflow_started',
+    eventCategory: 'workflow',
+    workflowId: info.workflowId,
+    workflowType: info.workflowType,
+    payload: {
+      batchId: input.batchId,
+      epicCount: input.epics.length,
+      timestamp: Date.now(),
+    },
+    source: 'temporal',
+  });
+
   // Build dependency graph and count total issues
   for (const epic of input.epics) {
     state.totalIssues += epic.issues.length;
@@ -154,7 +187,7 @@ export async function BatchCoordinatorWorkflow(
 
   // Spawn initial batch of workflows
   await Promise.all(
-    readyIssues.map((issue) => spawnIssueWorkflow(state, issue))
+    readyIssues.map((issue) => spawnIssueWorkflow(state, issue, info))
   );
 
   // Wait for all workflows to complete
@@ -189,7 +222,7 @@ export async function BatchCoordinatorWorkflow(
       if (nextReadyIssues.length > 0) {
         // Start next batch of ready issues
         await Promise.all(
-          nextReadyIssues.map((issue) => spawnIssueWorkflow(state, issue))
+          nextReadyIssues.map((issue) => spawnIssueWorkflow(state, issue, info))
         );
       } else {
         // No ready issues, but not all completed - deadlock or all failed
@@ -214,6 +247,22 @@ export async function BatchCoordinatorWorkflow(
       if (completed.success) {
         state.completedIssues.add(completed.issueId);
 
+        // Log issue completion
+        telemetry.writeEvent({
+          eventType: 'child_workflow_completed',
+          eventCategory: 'workflow',
+          workflowId: info.workflowId,
+          workflowType: info.workflowType,
+          payload: {
+            batchId: state.batchId,
+            issueId: completed.issueId,
+            totalCompleted: state.completedIssues.size,
+            totalIssues: state.totalIssues,
+            timestamp: Date.now(),
+          },
+          source: 'temporal',
+        });
+
         // Update epic progress
         const issue = allIssues.find((i) => i.id === completed.issueId);
         if (issue) {
@@ -221,10 +270,43 @@ export async function BatchCoordinatorWorkflow(
           if (progress) {
             progress.completed++;
             progress.completionPercentage = (progress.completed / progress.total) * 100;
+
+            // Log epic progress update
+            telemetry.writeEvent({
+              eventType: 'epic_progress_updated',
+              eventCategory: 'workflow',
+              workflowId: info.workflowId,
+              workflowType: info.workflowType,
+              payload: {
+                batchId: state.batchId,
+                epicId: issue.epicId,
+                completed: progress.completed,
+                total: progress.total,
+                completionPercentage: progress.completionPercentage,
+                timestamp: Date.now(),
+              },
+              source: 'temporal',
+            });
           }
         }
       } else {
         state.failedIssues.add(completed.issueId);
+
+        // Log issue failure
+        telemetry.writeEvent({
+          eventType: 'child_workflow_failed',
+          eventCategory: 'workflow',
+          workflowId: info.workflowId,
+          workflowType: info.workflowType,
+          payload: {
+            batchId: state.batchId,
+            issueId: completed.issueId,
+            error: completed.error,
+            totalFailed: state.failedIssues.size,
+            timestamp: Date.now(),
+          },
+          source: 'temporal',
+        });
 
         // Update epic progress
         const issue = allIssues.find((i) => i.id === completed.issueId);
@@ -256,9 +338,31 @@ export async function BatchCoordinatorWorkflow(
         return deps.every((depId) => state.completedIssues.has(depId));
       });
 
+      // Log dependency resolution for newly ready issues
+      if (nowReadyIssues.length > 0) {
+        for (const issue of nowReadyIssues) {
+          const deps = state.dependencyGraph.get(issue.id) || [];
+          if (deps.length > 0) {
+            telemetry.writeEvent({
+              eventType: 'dependency_resolved',
+              eventCategory: 'workflow',
+              workflowId: info.workflowId,
+              workflowType: info.workflowType,
+              payload: {
+                batchId: state.batchId,
+                issueId: issue.id,
+                dependencies: deps,
+                timestamp: Date.now(),
+              },
+              source: 'temporal',
+            });
+          }
+        }
+      }
+
       // Start newly ready issues
       await Promise.all(
-        nowReadyIssues.map((issue) => spawnIssueWorkflow(state, issue))
+        nowReadyIssues.map((issue) => spawnIssueWorkflow(state, issue, info))
       );
     }
   }
@@ -281,7 +385,8 @@ export async function BatchCoordinatorWorkflow(
  */
 async function spawnIssueWorkflow(
   state: BatchState,
-  issue: Issue
+  issue: Issue,
+  info: ReturnType<typeof workflowInfo>
 ): Promise<void> {
   const workflowId = `issue-lifecycle-${issue.id}`;
 
@@ -307,4 +412,23 @@ async function spawnIssueWorkflow(
   );
 
   state.runningIssues.set(issue.id, handle);
+
+  // Log child workflow spawn
+  telemetry.writeEvent({
+    eventType: 'child_workflow_spawned',
+    eventCategory: 'workflow',
+    workflowId: info.workflowId,
+    workflowType: info.workflowType,
+    payload: {
+      batchId: state.batchId,
+      issueId: issue.id,
+      issueTitle: issue.title,
+      epicId: issue.epicId,
+      complexity: issue.complexity,
+      dependencies: issue.dependencies,
+      childWorkflowId: workflowId,
+      timestamp: Date.now(),
+    },
+    source: 'temporal',
+  });
 }

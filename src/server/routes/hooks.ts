@@ -164,6 +164,23 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
     });
 
     try {
+      // Write to telemetry
+      const workflowId = `session-${payload.session_id}`;
+      await telemetryWriter.writeEvent({
+        workflowId,
+        workflowType: 'SessionWorkflow',
+        eventType: 'session_ended',
+        eventCategory: 'hook',
+        severity: 'info',
+        payload: {
+          worktree: payload.worktree,
+          tasks_completed: payload.tasks_completed,
+          tasks_failed: payload.tasks_failed,
+        },
+        durationMs: payload.duration_ms,
+        source: 'hook',
+      });
+
       // Forward to swarm orchestrator
       await swarmOrchestrator.handleHook('session-end', payload);
 
@@ -211,6 +228,24 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
     });
 
     try {
+      // Write to telemetry
+      const workflowId = `agent-${payload.agent_id}`;
+      await telemetryWriter.writeEvent({
+        workflowId,
+        workflowType: 'AgentWorkflow',
+        eventType: 'agent_completed',
+        eventCategory: 'hook',
+        severity: 'info',
+        agentId: payload.agent_id,
+        agentType: payload.agent_role,
+        payload: {
+          worktree: payload.worktree,
+          tasks_completed: payload.tasks_completed,
+        },
+        durationMs: payload.duration_ms,
+        source: 'hook',
+      });
+
       // Forward to swarm orchestrator
       await swarmOrchestrator.handleHook('agent-complete', payload);
 
@@ -257,6 +292,24 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
     });
 
     try {
+      // Write to telemetry
+      const workflowId = `epic-${payload.epic_number}`;
+      await telemetryWriter.writeEvent({
+        workflowId,
+        workflowType: 'EpicWorkflow',
+        eventType: 'phase_completed',
+        eventCategory: 'hook',
+        severity: 'info',
+        epicId: `EPIC-${payload.epic_number}`,
+        payload: {
+          phase: payload.phase,
+          worktree: payload.worktree,
+          tasks_completed: payload.tasks_completed,
+        },
+        durationMs: payload.duration_ms,
+        source: 'hook',
+      });
+
       // Update epic progress if GitHub integration is enabled
       if (process.env.GITHUB_TOKEN) {
         try {
@@ -323,6 +376,25 @@ export async function registerHookRoutes(fastify: FastifyInstance) {
     });
 
     try {
+      // Write to telemetry
+      const workflowId = payload.issue_number
+        ? `issue-lifecycle-ISSUE-${payload.issue_number}`
+        : `error-${Date.now()}`;
+      await telemetryWriter.writeEvent({
+        workflowId,
+        workflowType: 'IssueLifecycleWorkflow',
+        eventType: 'swarm_error_occurred',
+        eventCategory: 'hook',
+        severity: 'error',
+        issueId: payload.issue_number ? `ISSUE-${payload.issue_number}` : undefined,
+        payload: {
+          worktree: payload.worktree,
+          context: payload.context,
+        },
+        errorMessage: payload.error,
+        source: 'hook',
+      });
+
       // Post to GitHub if issue number provided
       if (payload.issue_number && process.env.GITHUB_TOKEN) {
         try {

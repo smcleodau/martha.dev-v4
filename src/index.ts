@@ -13,6 +13,7 @@ import { startServer } from './server/fastify.js';
 import { closePool } from './database/client.js';
 import { closeRedis } from './redis/client.js';
 import { trackerWatcher } from './tracker/services/watcher.js';
+import { errorMonitor } from './monitoring/error-monitor.js';
 
 async function main() {
   try {
@@ -32,6 +33,14 @@ async function main() {
       logger.info('Tracker watcher started');
     }
 
+    // Start error monitoring
+    errorMonitor.start(60000); // Check every minute
+    errorMonitor.on('alert', (alert) => {
+      logger.error('Error monitor alert', alert);
+      // In production, send to alerting service (Slack, PagerDuty, etc.)
+    });
+    logger.info('Error monitor started');
+
   } catch (error) {
     logger.error('Fatal error during startup', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -46,6 +55,7 @@ async function shutdown() {
   logger.info('Received shutdown signal, cleaning up...');
 
   try {
+    errorMonitor.stop();
     await trackerWatcher.stop();
     await closePool();
     await closeRedis();

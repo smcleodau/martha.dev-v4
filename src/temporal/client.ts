@@ -8,6 +8,7 @@
 import { Connection, Client, WorkflowHandle } from '@temporalio/client';
 import { temporalConfig } from './config.js';
 import logger from '../utils/logger.js';
+import * as fs from 'fs';
 
 let client: Client | null = null;
 let connection: Connection | null = null;
@@ -26,9 +27,21 @@ export async function getTemporalClient(): Promise<Client> {
       'Connecting to Temporal server'
     );
 
-    connection = await Connection.connect({
+    // Configure connection for Temporal Cloud or local
+    const isCloud = temporalConfig.address.includes('.tmprl.cloud') ||
+                    temporalConfig.address.includes('.api.temporal.io');
+    const connectionOptions: any = {
       address: temporalConfig.address,
-    });
+    };
+
+    if (isCloud && process.env.TEMPORAL_API_KEY) {
+      // Temporal Cloud with API key authentication (regional endpoint)
+      logger.info('Connecting to Temporal Cloud with API key');
+      connectionOptions.apiKey = process.env.TEMPORAL_API_KEY;
+      connectionOptions.tls = {}; // Enable TLS for API key authentication
+    }
+
+    connection = await Connection.connect(connectionOptions);
 
     client = new Client({
       connection,

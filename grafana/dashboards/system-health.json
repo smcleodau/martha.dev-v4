@@ -1,0 +1,96 @@
+{
+  "dashboard": {
+    "title": "Martha.dev - System Health",
+    "tags": ["martha", "system", "health"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "System Uptime",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "martha_system_uptime_seconds",
+            "legendFormat": "Uptime"
+          }
+        ],
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 }
+      },
+      {
+        "title": "HTTP Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(martha_http_requests_total[5m])",
+            "legendFormat": "{{method}} {{route}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 }
+      },
+      {
+        "title": "HTTP Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(martha_http_request_errors_total[5m])",
+            "legendFormat": "{{error_type}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 }
+      },
+      {
+        "title": "HTTP Request Duration (P95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(martha_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{route}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+      },
+      {
+        "title": "Database Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "martha_database_connections",
+            "legendFormat": "{{state}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 }
+      },
+      {
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "process_resident_memory_bytes{job='martha-orchestration'}",
+            "legendFormat": "RSS"
+          },
+          {
+            "expr": "nodejs_heap_size_used_bytes{job='martha-orchestration'}",
+            "legendFormat": "Heap Used"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 }
+      },
+      {
+        "title": "CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(process_cpu_user_seconds_total{job='martha-orchestration'}[5m])",
+            "legendFormat": "User"
+          },
+          {
+            "expr": "rate(process_cpu_system_seconds_total{job='martha-orchestration'}[5m])",
+            "legendFormat": "System"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }
+      }
+    ],
+    "refresh": "10s",
+    "time": { "from": "now-1h", "to": "now" }
+  }
+}

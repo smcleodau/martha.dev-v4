@@ -95,7 +95,19 @@ Martha's fresh color palette:
 
 ## 📚 Documentation
 
-See `/docs` directory:
+### Core Documentation (Epic 7.3)
+
+Comprehensive platform documentation for all stakeholders:
+
+- **[SYSTEM_OVERVIEW.md](./docs/SYSTEM_OVERVIEW.md)** - Executive overview and platform architecture
+- **[OPERATOR_RUNBOOK.md](./docs/OPERATOR_RUNBOOK.md)** - Deployment and operations guide
+- **[DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)** - Development workflow and best practices
+- **[API_REFERENCE.md](./docs/API_REFERENCE.md)** - Complete API documentation
+- **[ARCHITECTURE_DIAGRAMS.md](./docs/ARCHITECTURE_DIAGRAMS.md)** - Visual system architecture
+- **[DOCUMENTATION_INDEX.md](./docs/DOCUMENTATION_INDEX.md)** - Documentation index and completeness test
+
+### Additional Documentation
+
 - **[CAPABILITIES.md](./docs/CAPABILITIES.md)** - Complete feature overview
 - **[ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - System design
 - **[API.md](./docs/API.md)** - API reference

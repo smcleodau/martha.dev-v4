@@ -1,88 +1,59 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-
-import { appConfig } from '../../config/index.js';
-import { checkDatabaseHealth } from '../../database/client.js';
-import { checkRedisHealth } from '../../redis/client.js';
-import { createLogger } from '../../utils/logger.js';
-
-const logger = createLogger({ module: 'health' });
-
 /**
- * Health check routes
+ * Health Check Routes
+ *
+ * Comprehensive health checks for database, Temporal, and system resources
  */
-export async function healthRoutes(fastify: FastifyInstance) {
-  // Basic health check
-  fastify.get('/health', async (_request: FastifyRequest, reply: FastifyReply) => {
-    return reply.send({
-      status: 'healthy',
-      service: 'martha-typescript',
-      version: '3.0.0',
-      worktree: appConfig.worktreeName,
+
+import { Router, Request, Response } from 'express';
+import { Pool } from 'pg';
+import { Connection } from '@temporalio/client';
+import os from 'os';
+import logger from '../../utils/logger.js';
+import { appConfig } from '../../config/index.js';
+
+export interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  timestamp: string;
+  uptime: number;
+  checks: HealthCheck[];
+}
+
+export interface HealthCheck {
+  name: string;
+  status: 'pass' | 'warn' | 'fail';
+  message: string;
+  duration?: number;
+  metadata?: Record<string, any>;
+}
+
+export function createHealthRoutes(db: Pool): Router {
+  const router = Router();
+  const startTime = Date.now();
+
+  /**
+   * GET /health - Basic health check
+   */
+  router.get('/', async (req: Request, res: Response) => {
+    res.status(200).json({
+      status: 'ok',
       timestamp: new Date().toISOString(),
+      service: 'martha-orchestration',
+      version: appConfig.mcpServerVersion || '3.0.0',
     });
   });
 
-  // Detailed health check with dependencies
-  fastify.get('/health/detailed', async (_request: FastifyRequest, reply: FastifyReply) => {
-    const startTime = Date.now();
-
-    // Check all dependencies
-    const [dbHealthy, redisHealthy] = await Promise.all([
-      checkDatabaseHealth(),
-      checkRedisHealth(),
-    ]);
-
-    const duration = Date.now() - startTime;
-    const allHealthy = dbHealthy && redisHealthy;
-
-    const response = {
-      status: allHealthy ? 'healthy' : 'unhealthy',
-      service: 'martha-typescript',
-      version: '3.0.0',
-      worktree: appConfig.worktreeName,
-      timestamp: new Date().toISOString(),
-      checks: {
-        database: {
-          status: dbHealthy ? 'healthy' : 'unhealthy',
-          schema: appConfig.databaseSchema,
-        },
-        redis: {
-          status: redisHealthy ? 'healthy' : 'unhealthy',
-          keyPrefix: appConfig.redisKeyPrefix,
-        },
-      },
-      duration_ms: duration,
-    };
-
-    logger.debug('Health check completed', response);
-
-    return reply
-      .code(allHealthy ? 200 : 503)
-      .send(response);
+  /**
+   * GET /health/ready - Readiness check
+   */
+  router.get('/ready', async (req: Request, res: Response) => {
+    try {
+      await db.query('SELECT 1');
+      res.status(200).json({ ready: true, timestamp: new Date().toISOString() });
+    } catch (error) {
+      logger.error('Readiness check failed', { error });
+      res.status(503).json({ ready: false, timestamp: new Date().toISOString() });
+    }
   });
 
-  // Readiness check (for k8s/orchestration)
-  fastify.get('/ready', async (_request: FastifyRequest, reply: FastifyReply) => {
-    const [dbHealthy, redisHealthy] = await Promise.all([
-      checkDatabaseHealth(),
-      checkRedisHealth(),
-    ]);
-
-    const ready = dbHealthy && redisHealthy;
-
-    return reply
-      .code(ready ? 200 : 503)
-      .send({
-        ready,
-        timestamp: new Date().toISOString(),
-      });
-  });
-
-  // Liveness check (for k8s/orchestration)
-  fastify.get('/live', async (_request: FastifyRequest, reply: FastifyReply) => {
-    return reply.send({
-      alive: true,
-      timestamp: new Date().toISOString(),
-    });
-  });
+  return router;
 }

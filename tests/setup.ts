@@ -7,11 +7,8 @@
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent'; // Suppress logs during tests
 
-// Mock timers if needed
-// jest.useFakeTimers();
-
-// Global test timeout
-jest.setTimeout(10000);
+// Note: Global timeout is configured in jest.config.js (testTimeout: 10000)
+// In ESM mode, jest global is not available in setup files
 
 // Clean up after tests
 afterAll(async () => {

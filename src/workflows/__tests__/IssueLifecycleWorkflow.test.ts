@@ -14,6 +14,12 @@
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { v4 as uuidv4 } from 'uuid';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+// ESM equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 import {
   IssueLifecycleWorkflow,
   IssueInput,
@@ -80,7 +86,7 @@ describe('IssueLifecycleWorkflow', () => {
       const worker = await Worker.create({
         connection: nativeConnection,
         taskQueue: 'test',
-        workflowsPath: require.resolve('../IssueLifecycleWorkflow.js'),
+        workflowsPath: resolve(__dirname, '../IssueLifecycleWorkflow.ts'),
         activities: mockActivities,
       });
 
@@ -177,7 +183,7 @@ describe('IssueLifecycleWorkflow', () => {
       const worker = await Worker.create({
         connection: nativeConnection,
         taskQueue: 'test',
-        workflowsPath: require.resolve('../IssueLifecycleWorkflow.js'),
+        workflowsPath: resolve(__dirname, '../IssueLifecycleWorkflow.ts'),
         activities: mockActivities,
       });
 
@@ -257,7 +263,7 @@ describe('IssueLifecycleWorkflow', () => {
       const worker = await Worker.create({
         connection: nativeConnection,
         taskQueue: 'test',
-        workflowsPath: require.resolve('../IssueLifecycleWorkflow.js'),
+        workflowsPath: resolve(__dirname, '../IssueLifecycleWorkflow.ts'),
         activities: mockActivities,
       });
 
@@ -324,7 +330,7 @@ describe('IssueLifecycleWorkflow', () => {
       const worker = await Worker.create({
         connection: nativeConnection,
         taskQueue: 'test',
-        workflowsPath: require.resolve('../IssueLifecycleWorkflow.js'),
+        workflowsPath: resolve(__dirname, '../IssueLifecycleWorkflow.ts'),
         activities: mockActivities,
       });
 

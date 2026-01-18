@@ -20,6 +20,8 @@ import { registerHookRoutes } from './routes/hooks.js';
 import { registerSwarmRoutes } from './routes/swarms.js';
 import { testRoutes } from './routes/tests.js';
 import { docsRoutes } from './routes/docs.js';
+import telemetryRoutes from './routes/telemetry.js';
+import { registerWorkflowSignalRoutes } from './routes/workflow-signals.js';
 
 // Tracker routes
 import { issuesRoutes, hierarchicalIssuesRoutes } from '../tracker/routes/issues.js';
@@ -80,22 +82,9 @@ export async function createServer() {
     done();
   });
 
-  // Error handler
-  server.setErrorHandler(async (error, request, reply) => {
-    serverLogger.error('Request error', {
-      error: error.message,
-      stack: error.stack,
-      method: request.method,
-      url: request.url,
-    });
-
-    await reply.status(error.statusCode || 500).send({
-      error: {
-        message: error.message || 'Internal Server Error',
-        statusCode: error.statusCode || 500,
-      },
-    });
-  });
+  // Error handler - use comprehensive error handling middleware
+  const { errorHandler } = await import('../middleware/error-handler.js');
+  server.setErrorHandler(errorHandler);
 
   // Register API routes first
   await server.register(healthRoutes);
@@ -107,6 +96,8 @@ export async function createServer() {
   await server.register(testRoutes);
   await server.register(dashboardRoutes); // Changelog API
   await server.register(docsRoutes); // Documentation API
+  await server.register(telemetryRoutes); // Telemetry API
+  await server.register(registerWorkflowSignalRoutes); // Workflow signals API
 
   // Register tracker routes (backward compatible)
   await server.register(authRoutes, { prefix: '/api/tracker/auth' });

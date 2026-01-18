@@ -1,0 +1,100 @@
+{
+  "dashboard": {
+    "title": "Martha.dev - Workflow Metrics",
+    "tags": ["martha", "workflows", "temporal"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Active Workflows",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "martha_workflows_active",
+            "legendFormat": "{{workflow_type}}"
+          }
+        ],
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 }
+      },
+      {
+        "title": "Workflow Start Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(martha_workflows_started_total[5m])",
+            "legendFormat": "{{workflow_type}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 }
+      },
+      {
+        "title": "Workflow Completion Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(martha_workflows_completed_total{status='success'}[5m])",
+            "legendFormat": "Success - {{workflow_type}}"
+          },
+          {
+            "expr": "rate(martha_workflows_completed_total{status='failure'}[5m])",
+            "legendFormat": "Failure - {{workflow_type}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 }
+      },
+      {
+        "title": "Workflow Duration (P50, P95, P99)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(martha_workflow_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50 - {{workflow_type}}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(martha_workflow_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95 - {{workflow_type}}"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(martha_workflow_duration_seconds_bucket[5m]))",
+            "legendFormat": "P99 - {{workflow_type}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+      },
+      {
+        "title": "Activity Execution Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(martha_activities_started_total[5m])",
+            "legendFormat": "{{activity_name}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }
+      },
+      {
+        "title": "Activity Retry Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(martha_activity_retries_total[5m])",
+            "legendFormat": "{{activity_name}} - {{reason}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }
+      },
+      {
+        "title": "Activity Duration (P95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(martha_activity_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{activity_name}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 }
+      }
+    ],
+    "refresh": "10s",
+    "time": { "from": "now-1h", "to": "now" }
+  }
+}

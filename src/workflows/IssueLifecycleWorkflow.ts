@@ -38,6 +38,7 @@ import {
   workflowInfo,
 } from '@temporalio/workflow';
 import type * as activities from '../activities/issue-activities.js';
+import type * as gateActivities from '../activities/gate-activities.js';
 
 // Telemetry sink for stage transition events
 interface TelemetrySinks {
@@ -98,6 +99,17 @@ const {
     backoffCoefficient: 2,
     maximumInterval: '5 minutes',
     maximumAttempts: 5,
+  },
+});
+
+// Proxy gate check activities
+const { checkStageGate } = proxyActivities<typeof gateActivities>({
+  startToCloseTimeout: '5 minutes',
+  retry: {
+    initialInterval: '2 seconds',
+    backoffCoefficient: 2,
+    maximumInterval: '1 minute',
+    maximumAttempts: 3,
   },
 });
 
@@ -423,6 +435,27 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
       );
     }
 
+    // ===== Gate Check: Development -> Testing =====
+    const devGateResult = await checkStageGate({
+      issueId: issue.id,
+      currentStage: 'DEVELOPMENT',
+      epicId: issue.epicId,
+    });
+
+    if (!devGateResult.allowed) {
+      addHistory(state, 'Gate check failed: Development -> Testing', {
+        reason: devGateResult.reason,
+        missingRequirements: devGateResult.missingRequirements,
+      });
+      throw new Error(
+        `Cannot move to TESTING: ${devGateResult.reason}. Missing: ${devGateResult.missingRequirements.join(', ')}`
+      );
+    }
+
+    addHistory(state, 'Gate check passed: Development -> Testing', {
+      qualityScore: devGateResult.qualityScore,
+    });
+
     // ===== Stage 4: Testing =====
     logStageTransition(state.stage, Stage.TESTING, issue.id, 'Development completed');
     state.stage = Stage.TESTING;
@@ -458,6 +491,27 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
 
     addHistory(state, 'Tests passed', { passed: state.testResults?.passed });
 
+    // ===== Gate Check: Testing -> Review =====
+    const testGateResult = await checkStageGate({
+      issueId: issue.id,
+      currentStage: 'TESTING',
+      epicId: issue.epicId,
+    });
+
+    if (!testGateResult.allowed) {
+      addHistory(state, 'Gate check failed: Testing -> Review', {
+        reason: testGateResult.reason,
+        missingRequirements: testGateResult.missingRequirements,
+      });
+      throw new Error(
+        `Cannot move to REVIEW: ${testGateResult.reason}. Missing: ${testGateResult.missingRequirements.join(', ')}`
+      );
+    }
+
+    addHistory(state, 'Gate check passed: Testing -> Review', {
+      qualityScore: testGateResult.qualityScore,
+    });
+
     // ===== Stage 5: Review =====
     logStageTransition(state.stage, Stage.REVIEW, issue.id, 'Tests passed');
     state.stage = Stage.REVIEW;
@@ -482,6 +536,27 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     state.metrics.reviewDuration = Date.now() - reviewStartTime;
     addHistory(state, 'Review approved', {});
 
+    // ===== Gate Check: Review -> Merge =====
+    const reviewGateResult = await checkStageGate({
+      issueId: issue.id,
+      currentStage: 'REVIEW',
+      epicId: issue.epicId,
+    });
+
+    if (!reviewGateResult.allowed) {
+      addHistory(state, 'Gate check failed: Review -> Merge', {
+        reason: reviewGateResult.reason,
+        missingRequirements: reviewGateResult.missingRequirements,
+      });
+      throw new Error(
+        `Cannot move to MERGE: ${reviewGateResult.reason}. Missing: ${reviewGateResult.missingRequirements.join(', ')}`
+      );
+    }
+
+    addHistory(state, 'Gate check passed: Review -> Merge', {
+      qualityScore: reviewGateResult.qualityScore,
+    });
+
     // ===== Stage 6: Merge =====
     logStageTransition(state.stage, Stage.MERGE, issue.id, 'Review approved');
     state.stage = Stage.MERGE;
@@ -494,6 +569,27 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     });
 
     addHistory(state, 'Code merged', { mergeSha: mergeResult.mergeSha });
+
+    // ===== Gate Check: Merge -> Completion =====
+    const mergeGateResult = await checkStageGate({
+      issueId: issue.id,
+      currentStage: 'MERGE',
+      epicId: issue.epicId,
+    });
+
+    if (!mergeGateResult.allowed) {
+      addHistory(state, 'Gate check failed: Merge -> Completion', {
+        reason: mergeGateResult.reason,
+        missingRequirements: mergeGateResult.missingRequirements,
+      });
+      throw new Error(
+        `Cannot move to COMPLETION: ${mergeGateResult.reason}. Missing: ${mergeGateResult.missingRequirements.join(', ')}`
+      );
+    }
+
+    addHistory(state, 'Gate check passed: Merge -> Completion', {
+      qualityScore: mergeGateResult.qualityScore,
+    });
 
     // ===== Stage 7: Completion =====
     logStageTransition(state.stage, Stage.COMPLETION, issue.id, 'Code merged');

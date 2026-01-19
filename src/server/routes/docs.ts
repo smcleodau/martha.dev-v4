@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
 const logger = createLogger({ module: 'docs' });
 
 export async function docsRoutes(fastify: FastifyInstance) {
-  const docsPath = join(__dirname, '../../../../docs');
+  const docsPath = join(process.cwd(), 'docs');
   const trackerDocsPath = join(docsPath, 'tracker');
   const apiDocsPath = join(docsPath, 'api');
 

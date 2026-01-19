@@ -706,7 +706,7 @@ export function TrackerPage() {
       </header>
 
       {/* Board Info Section */}
-      {currentBoard && (
+      {currentBoard && board && (
         <div
           className="px-6 py-3 border-b"
           style={{
@@ -752,7 +752,7 @@ export function TrackerPage() {
         aria-label="Issue tracker board"
         tabIndex={-1}
       >
-      {viewMode === 'kanban' && (
+      {viewMode === 'kanban' && board && (
         <KanbanBoard
           board={board}
           issues={filteredIssues}
@@ -765,7 +765,7 @@ export function TrackerPage() {
         />
       )}
 
-      {viewMode === 'list' && (
+      {viewMode === 'list' && board && (
         <ListView
           issues={Object.values(filteredIssues)}
           onIssueClick={(issue) => {
@@ -778,7 +778,7 @@ export function TrackerPage() {
         />
       )}
 
-      {viewMode === 'timeline' && (
+      {viewMode === 'timeline' && board && (
         <TimelineView
           issues={filteredIssues}
           worktreeId={selectedWorktreeId}
@@ -793,7 +793,7 @@ export function TrackerPage() {
         />
       )}
 
-      {viewMode === 'gantt' && (
+      {viewMode === 'gantt' && board && (
         <GanttView
           issues={filteredIssues}
           onIssueClick={(issueId) => {

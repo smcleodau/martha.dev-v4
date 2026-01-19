@@ -1,5 +1,6 @@
 /**
- * Issue Detail Panel Component - Comprehensive issue detail and edit panel
+ * Issue Detail Panel Component - Single-scroll comprehensive detail panel with warm design
+ * Responsive: Side panel on desktop/tablet, full-screen overlay on mobile
  */
 
 import { type Issue, type Board, type Comment, hierarchicalIssuesApi, commentsApi } from '../../../api/tracker';
@@ -12,42 +13,57 @@ import { CommentForm } from '../comments/CommentForm';
 import { CommentsList } from '../comments/CommentsList';
 import { DocumentationPanel } from '../documentation/DocumentationPanel';
 import { ActivityTimeline } from '../activity/ActivityTimeline';
+import { IssueDetailHeader } from './IssueDetailHeader';
+import { QualityMetricsPanel } from './QualityMetricsPanel';
+import { WorkflowProgressVisualizer } from './WorkflowProgressVisualizer';
+import { LinkedImplementations } from './LinkedImplementations';
+import { StoryPointsField } from './StoryPointsField';
+import { EpicSelector } from './EpicSelector';
+import { TimeTracking } from './TimeTracking';
+import { ReleaseTracking } from './ReleaseTracking';
+import { PolicyCompliance } from './PolicyCompliance';
+import { DependenciesPanel } from './DependenciesPanel';
+import { WatchersPanel } from './WatchersPanel';
+import { EngagementPanel } from './EngagementPanel';
+import { useIsMobile } from '../../../hooks/useMediaQuery';
+import { useFocusTrap } from '../../../hooks/useFocusTrap';
 
 interface IssueDetailPanelProps {
   issue: Issue;
   board: Board;
+  allIssues: Record<string, Issue>;  // NEW: For parent issue lookup
   onClose: () => void;
   onStatusChange: (issueId: string, newStatus: string) => void;
 }
 
-type TabType = 'details' | 'activity' | 'comments' | 'documentation';
-
-export function IssueDetailPanel({ issue, board, onClose, onStatusChange }: IssueDetailPanelProps) {
+export function IssueDetailPanel({ issue, board, allIssues, onClose, onStatusChange }: IssueDetailPanelProps) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabType>('details');
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editedTitle, setEditedTitle] = useState(issue.title);
+  const isMobile = useIsMobile();
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState(issue.description || '');
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
 
-  const handleTitleSave = () => {
-    // TODO: Call API to update issue title
-    setIsEditingTitle(false);
-  };
+  // Get parent issue if exists
+  const parentIssue = issue.parent_id ? allIssues[issue.parent_id] : null;
+
+  // Focus trap for accessibility
+  const panelRef = useFocusTrap<HTMLDivElement>({
+    enabled: true,
+    onEscape: onClose,
+    restoreFocus: true,
+    initialFocus: true
+  });
 
   const handleDescriptionSave = () => {
     // TODO: Call API to update issue description
     setIsEditingDescription(false);
   };
 
-  // Load comments when comments tab becomes active
+  // Load comments on mount
   useEffect(() => {
-    if (activeTab === 'comments' && !commentsLoading && comments.length === 0) {
-      loadComments();
-    }
-  }, [activeTab]);
+    loadComments();
+  }, [issue.id]);
 
   const loadComments = async () => {
     setCommentsLoading(true);
@@ -80,433 +96,569 @@ export function IssueDetailPanel({ issue, board, onClose, onStatusChange }: Issu
     await loadComments();
   };
 
-  const typeColor = {
-    epic: 'bg-purple-50 text-purple-700 border-purple-200',
-    story: 'bg-blue-50 text-blue-700 border-blue-200',
-    task: 'bg-gray-50 text-gray-700 border-gray-200',
-    bug: 'bg-red-50 text-red-700 border-red-200'
-  }[issue.type];
-
-  const priorityColor = {
-    critical: 'bg-red-100 text-red-800',
-    high: 'bg-orange-100 text-orange-800',
-    medium: 'bg-yellow-100 text-yellow-800',
-    low: 'bg-gray-100 text-gray-600'
-  }[issue.priority];
-
   return (
-    <div className="fixed inset-y-0 right-0 w-[800px] bg-white border-l border-gray-200 shadow-2xl overflow-hidden flex flex-col">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-mono text-gray-500 font-semibold">{issue.id}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${typeColor}`}>
-              {issue.type}
-            </span>
-            <span className={`text-xs px-2 py-1 rounded-md font-semibold ${priorityColor}`}>
-              {issue.priority}
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <>
+      {/* Mobile: Full-screen overlay with backdrop */}
+      {isMobile && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
 
-        {/* Title */}
-        {isEditingTitle ? (
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={editedTitle}
-              onChange={(e) => setEditedTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleTitleSave();
-                if (e.key === 'Escape') setIsEditingTitle(false);
-              }}
-              className="flex-1 text-xl font-bold text-gray-900 px-2 py-1 border border-blue-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus
-            />
+      {/* Panel - Full screen on mobile, side panel on desktop/tablet */}
+      <div
+        ref={panelRef}
+        className={`fixed z-50 border-l shadow-2xl overflow-hidden flex flex-col ${
+          isMobile
+            ? 'inset-0'
+            : 'inset-y-0 right-0 w-full md:w-[900px]'
+        }`}
+        style={{ backgroundColor: '#F5F1ED' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="issue-detail-title"
+        aria-describedby="issue-detail-description"
+      >
+        {/* Header with action buttons - Mobile includes back button */}
+        {isMobile ? (
+          <div
+            className="flex items-center gap-3 px-4 py-4 border-b"
+            style={{
+              backgroundColor: 'white',
+              borderBottomColor: '#E8E0D5',
+            }}
+          >
+            {/* Back button */}
             <button
-              onClick={handleTitleSave}
-              className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium"
+              onClick={onClose}
+              className="p-2 rounded-lg transition-colors touch-manipulation"
+              style={{
+                color: '#6B5D52',
+                minWidth: '44px',
+                minHeight: '44px',
+              }}
+              aria-label="Go back"
             >
-              Save
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
             </button>
+
+            {/* Issue ID and Title */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-semibold" style={{ color: '#A39686' }}>
+                  {issue.id}
+                </span>
+                {parentIssue && (
+                  <>
+                    <span style={{ color: '#D4C4B0' }}>•</span>
+                    <span className="text-xs" style={{ color: '#6B5D52' }}>
+                      {parentIssue.id}
+                    </span>
+                  </>
+                )}
+              </div>
+              <h2 className="text-base font-semibold truncate" style={{ color: '#2F241B' }}>
+                {issue.title}
+              </h2>
+            </div>
           </div>
         ) : (
-          <h2
-            onClick={() => setIsEditingTitle(true)}
-            className="text-xl font-bold text-gray-900 cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors"
-          >
-            {issue.title}
-          </h2>
+          <IssueDetailHeader
+            issue={issue}
+            parentIssue={parentIssue}
+            onClose={onClose}
+            onStatusChange={onStatusChange}
+          />
         )}
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 mt-4">
-          {(['details', 'activity', 'comments', 'documentation'] as TabType[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-all ${
-                activeTab === tab
-                  ? 'text-blue-600 border-blue-500 bg-white'
-                  : 'text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-50'
-              }`}
+        {/* Single scrolling content - Mobile responsive */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6">
+        {/* Core Details Section */}
+        <div
+          className="bg-white rounded-lg p-6 shadow-warm-md"
+          style={{
+            borderColor: '#E8E0D5',
+            borderWidth: '1px',
+            borderStyle: 'solid'
+          }}
+        >
+          <h3 className="text-lg font-semibold mb-4" style={{ color: '#2F241B' }}>
+            Details
+          </h3>
+
+          {/* Status */}
+          <div className="mb-4">
+            <label className="text-sm font-semibold block mb-2" style={{ color: '#6B5D52' }}>
+              Status
+            </label>
+            <select
+              value={issue.status}
+              onChange={(e) => onStatusChange(issue.id, e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus-coral bg-white"
+              style={{ borderColor: '#E8E0D5', color: '#2F241B' }}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
+              {board.columns.map((col) => (
+                <option key={col.id} value={col.id}>
+                  {col.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        {activeTab === 'details' && (
-          <div className="p-6 space-y-6">
-            {/* Status */}
-            <div>
-              <label className="text-sm font-semibold text-gray-700 block mb-2">Status</label>
-              <select
-                value={issue.status}
-                onChange={(e) => onStatusChange(issue.id, e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                {board.columns.map((col) => (
-                  <option key={col.id} value={col.id}>
-                    {col.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Assignee */}
-            <div>
-              <label className="text-sm font-semibold text-gray-700 block mb-2">Assignee</label>
-              <div className="flex items-center gap-2">
-                {issue.assignee ? (
-                  <>
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold shadow-sm">
-                      {issue.assignee.name.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">{issue.assignee.name}</span>
-                  </>
-                ) : (
-                  <span className="text-sm text-gray-500">Unassigned</span>
-                )}
-                <button className="ml-auto text-sm text-blue-600 hover:text-blue-700 font-medium">
-                  Change
-                </button>
-              </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="text-sm font-semibold text-gray-700 block mb-2">Description</label>
-              {isEditingDescription ? (
-                <div className="space-y-2">
-                  <textarea
-                    value={editedDescription}
-                    onChange={(e) => setEditedDescription(e.target.value)}
-                    rows={8}
-                    className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                    placeholder="Add a description..."
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleDescriptionSave}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setIsEditingDescription(false)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
+          {/* Assignee */}
+          <div className="mb-4">
+            <label className="text-sm font-semibold block mb-2" style={{ color: '#6B5D52' }}>
+              Assignee
+            </label>
+            <div className="flex items-center gap-2">
+              {issue.assignee ? (
+                <>
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold shadow-sm"
+                    style={{
+                      background: 'linear-gradient(135deg, #D97F6F 0%, #E0B666 100%)'
+                    }}
+                  >
+                    {issue.assignee.name.charAt(0).toUpperCase()}
                   </div>
-                </div>
+                  <span className="text-sm font-medium" style={{ color: '#2F241B' }}>
+                    {issue.assignee.name}
+                  </span>
+                </>
               ) : (
-                <div
-                  onClick={() => setIsEditingDescription(true)}
-                  className="min-h-[100px] p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                >
-                  {issue.description ? (
-                    <div className="prose prose-sm max-w-none" onClick={(e) => e.stopPropagation()}>
-                      <ReactMarkdown
-                        components={{
-                          code(props: any) {
-                            const { node, inline, className, children, ...rest } = props;
-                            const match = /language-(\w+)/.exec(className || '');
-                            return !inline && match ? (
-                              <SyntaxHighlighter
-                                style={vscDarkPlus as any}
-                                language={match[1]}
-                                PreTag="div"
-                              >
-                                {String(children).replace(/\n$/, '')}
-                              </SyntaxHighlighter>
-                            ) : (
-                              <code className={className} {...rest}>
-                                {children}
-                              </code>
-                            );
-                          },
-                          a(props: any) {
-                            const { node, href, ...rest } = props;
-                            // Handle internal tracker links
-                            if (href && href.startsWith('/tracker/')) {
-                              return (
-                                <a
-                                  href={href}
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    navigate(href);
-                                  }}
-                                  className="text-blue-600 hover:text-blue-700 underline cursor-pointer"
-                                  {...rest}
-                                />
-                              );
-                            }
-                            // External links
-                            return <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} {...rest} />;
-                          },
-                        }}
-                      >
-                        {issue.description}
-                      </ReactMarkdown>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Click to add description</p>
-                  )}
-                </div>
+                <span className="text-sm" style={{ color: '#A39686' }}>
+                  Unassigned
+                </span>
               )}
+              <button
+                className="ml-auto text-sm font-medium"
+                style={{ color: '#D97F6F' }}
+              >
+                Change
+              </button>
             </div>
+          </div>
 
-            {/* Labels */}
-            <div>
-              <label className="text-sm font-semibold text-gray-700 block mb-2">Labels</label>
-              <div className="flex flex-wrap gap-2">
-                {issue.labels && issue.labels.length > 0 ? (
-                  issue.labels.map((label, idx) => (
-                    <span
-                      key={idx}
-                      className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md text-sm font-medium"
+          {/* Story Points */}
+          <StoryPointsField
+            issue={issue}
+            worktreeId={issue.worktree_id}
+            boardId={issue.board_id}
+          />
+
+          {/* Priority */}
+          <div className="mb-4">
+            <label className="text-sm font-semibold block mb-2" style={{ color: '#6B5D52' }}>
+              Priority
+            </label>
+            <select
+              value={issue.priority}
+              onChange={async (e) => {
+                try {
+                  await hierarchicalIssuesApi.update(
+                    issue.worktree_id,
+                    issue.board_id,
+                    issue.id,
+                    { priority: e.target.value as Issue['priority'] }
+                  );
+                  window.location.reload();
+                } catch (err) {
+                  console.error('Failed to update priority:', err);
+                  alert('Failed to update priority');
+                }
+              }}
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus-coral bg-white"
+              style={{ borderColor: '#E8E0D5', color: '#2F241B' }}
+            >
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          {/* Epic */}
+          <EpicSelector
+            issue={issue}
+            worktreeId={issue.worktree_id}
+            boardId={issue.board_id}
+          />
+
+          {/* Description */}
+          <div className="mb-4">
+            <label className="text-sm font-semibold block mb-2" style={{ color: '#6B5D52' }}>
+              Description
+            </label>
+            {isEditingDescription ? (
+              <div className="space-y-2">
+                <textarea
+                  value={editedDescription}
+                  onChange={(e) => setEditedDescription(e.target.value)}
+                  rows={8}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus-coral font-mono text-sm"
+                  style={{ borderColor: '#D97F6F', color: '#2F241B' }}
+                  placeholder="Add a description..."
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleDescriptionSave}
+                    className="px-4 py-2 rounded-md text-white text-sm font-medium"
+                    style={{ backgroundColor: '#D97F6F' }}
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setIsEditingDescription(false)}
+                    className="px-4 py-2 rounded-md text-sm font-medium"
+                    style={{ backgroundColor: '#F5F1EC', color: '#6B5D52' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => setIsEditingDescription(true)}
+                className="min-h-[100px] p-3 border rounded-lg cursor-pointer transition-colors"
+                style={{
+                  borderColor: '#E8E0D5',
+                  backgroundColor: 'white'
+                }}
+              >
+                {issue.description ? (
+                  <div className="prose prose-sm max-w-none" onClick={(e) => e.stopPropagation()}>
+                    <ReactMarkdown
+                      components={{
+                        code(props: any) {
+                          const { node, inline, className, children, ...rest } = props;
+                          const match = /language-(\w+)/.exec(className || '');
+                          return !inline && match ? (
+                            <SyntaxHighlighter
+                              style={vscDarkPlus as any}
+                              language={match[1]}
+                              PreTag="div"
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code className={className} {...rest}>
+                              {children}
+                            </code>
+                          );
+                        },
+                        a(props: any) {
+                          const { node, href, ...rest } = props;
+                          if (href && href.startsWith('/tracker/')) {
+                            return (
+                              <a
+                                href={href}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  navigate(href);
+                                }}
+                                className="hover:underline cursor-pointer"
+                                style={{ color: '#6B9BD1' }}
+                                {...rest}
+                              />
+                            );
+                          }
+                          return <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} {...rest} />;
+                        },
+                      }}
                     >
-                      {label}
-                    </span>
-                  ))
+                      {issue.description}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
-                  <span className="text-sm text-gray-500">No labels</span>
+                  <p className="text-sm italic" style={{ color: '#A39686' }}>
+                    Click to add description
+                  </p>
                 )}
-                <button className="px-3 py-1 border border-dashed border-gray-300 text-gray-600 rounded-md text-sm font-medium hover:bg-gray-50">
-                  + Add label
-                </button>
               </div>
+            )}
+          </div>
+
+          {/* Labels */}
+          <div>
+            <label className="text-sm font-semibold block mb-2" style={{ color: '#6B5D52' }}>
+              Labels
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {issue.labels && issue.labels.length > 0 ? (
+                issue.labels.map((label, idx) => (
+                  <span
+                    key={idx}
+                    className="px-3 py-1 rounded-md text-sm font-medium"
+                    style={{
+                      backgroundColor: '#F5F1EC',
+                      color: '#6B5D52'
+                    }}
+                  >
+                    {label}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm" style={{ color: '#A39686' }}>
+                  No labels
+                </span>
+              )}
+              <button
+                className="px-3 py-1 border border-dashed rounded-md text-sm font-medium"
+                style={{
+                  borderColor: '#E8E0D5',
+                  color: '#6B5D52'
+                }}
+              >
+                + Add label
+              </button>
             </div>
+          </div>
+        </div>
 
-            {/* Quality Checklist */}
-            {issue.quality?.checklist && issue.quality.checklist.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-2">Acceptance Criteria</h3>
-                <div className="space-y-2">
-                  {issue.quality.checklist.map((item, index) => {
-                    const isChecked = item.startsWith('[x]') || item.startsWith('[X]');
-                    const itemText = item.replace(/^\[[ xX]\] /, '');
+        {/* Quality Metrics Panel */}
+        <QualityMetricsPanel issue={issue} />
 
-                    return (
-                      <label key={index} className="flex items-start gap-2 cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={async (e) => {
-                            // Update checklist item
-                            const updatedChecklist = [...issue.quality.checklist];
-                            updatedChecklist[index] = e.target.checked
-                              ? `[x] ${itemText}`
-                              : `[ ] ${itemText}`;
+        {/* Release Tracking - Conditional rendering based on release_id */}
+        <ReleaseTracking issue={issue} />
 
-                            try {
-                              await hierarchicalIssuesApi.update(
-                                issue.worktree_id,
-                                issue.board_id,
-                                issue.id,
-                                {
-                                  quality: {
-                                    ...issue.quality,
-                                    checklist: updatedChecklist
-                                  }
-                                }
-                              );
-                              // Reload issue to update UI
-                              window.location.reload();
-                            } catch (err) {
-                              console.error('Failed to update checklist:', err);
-                              alert('Failed to update checklist');
+        {/* Policy Compliance */}
+        <PolicyCompliance issue={issue} />
+
+        {/* Workflow Progress */}
+        <WorkflowProgressVisualizer issue={issue} />
+
+        {/* Acceptance Criteria */}
+        {issue.quality?.checklist && issue.quality.checklist.length > 0 && (
+          <div
+            className="bg-white rounded-lg p-6 shadow-warm-md"
+            style={{
+              borderColor: '#E8E0D5',
+              borderWidth: '1px',
+              borderStyle: 'solid'
+            }}
+          >
+            <h3 className="text-lg font-semibold mb-4" style={{ color: '#2F241B' }}>
+              Acceptance Criteria
+            </h3>
+            <div className="space-y-2">
+              {issue.quality.checklist.map((item, index) => {
+                const isChecked = item.startsWith('[x]') || item.startsWith('[X]');
+                const itemText = item.replace(/^\[[ xX]\] /, '');
+
+                return (
+                  <label key={index} className="flex items-start gap-2 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={async (e) => {
+                        const updatedChecklist = [...issue.quality.checklist];
+                        updatedChecklist[index] = e.target.checked
+                          ? `[x] ${itemText}`
+                          : `[ ] ${itemText}`;
+
+                        try {
+                          await hierarchicalIssuesApi.update(
+                            issue.worktree_id,
+                            issue.board_id,
+                            issue.id,
+                            {
+                              quality: {
+                                ...issue.quality,
+                                checklist: updatedChecklist
+                              }
                             }
-                          }}
-                          className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                          {itemText}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-                <div className="mt-2 text-xs text-gray-500">
-                  {issue.quality.checklist.filter(i => i.startsWith('[x]') || i.startsWith('[X]')).length} / {issue.quality.checklist.length} completed
-                </div>
-              </div>
-            )}
-
-            {/* Links */}
-            {issue.links && (
-              <div>
-                <label className="text-sm font-semibold text-gray-700 block mb-2">Links</label>
-                <div className="space-y-2">
-                  {issue.links.pr && (
-                    <a
-                      href={issue.links.pr}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633z" clipRule="evenodd"/>
-                      </svg>
-                      Pull Request
-                    </a>
-                  )}
-                  {issue.links.related_issues && issue.links.related_issues.length > 0 && (
-                    <div>
-                      <span className="text-xs text-gray-500 block mb-1">Related issues:</span>
-                      <div className="flex flex-wrap gap-2">
-                        {issue.links.related_issues.map((relatedId) => (
-                          <button
-                            key={relatedId}
-                            onClick={() => {
-                              navigate(`/tracker/${issue.worktree_id}/${issue.board_id}/${relatedId}`);
-                            }}
-                            className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 hover:text-gray-900 transition-colors"
-                          >
-                            {relatedId}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {issue.links.external && issue.links.external.length > 0 && (
-                    <div>
-                      <span className="text-xs text-gray-500 block mb-1">External links:</span>
-                      <div className="space-y-1">
-                        {issue.links.external.map((url, index) => (
-                          <a
-                            key={index}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                            {url.includes('github.com') ? 'View on GitHub' : new URL(url).hostname}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Metadata */}
-            <div className="pt-4 border-t border-gray-200">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 block mb-1">Created</label>
-                  <p className="text-gray-900">
-                    {new Date(issue.metadata?.created_at || (issue as any).created_at).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 block mb-1">Updated</label>
-                  <p className="text-gray-900">
-                    {new Date(issue.metadata?.updated_at || (issue as any).updated_at).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 block mb-1">Board</label>
-                  <p className="text-gray-900">{issue.board_id}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 block mb-1">Worktree</label>
-                  <p className="text-gray-900">{issue.worktree_id}</p>
-                </div>
-              </div>
+                          );
+                          window.location.reload();
+                        } catch (err) {
+                          console.error('Failed to update checklist:', err);
+                          alert('Failed to update checklist');
+                        }
+                      }}
+                      className="mt-1 rounded focus-coral"
+                      style={{
+                        borderColor: '#E8E0D5',
+                        color: '#D97F6F'
+                      }}
+                    />
+                    <span className="text-sm group-hover:font-medium" style={{ color: '#6B5D52' }}>
+                      {itemText}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-3 text-xs font-medium" style={{ color: '#A39686' }}>
+              {(issue.quality.checklist || []).filter(i => i.startsWith('[x]') || i.startsWith('[X]')).length} / {(issue.quality.checklist || []).length} completed
             </div>
           </div>
         )}
 
-        {activeTab === 'activity' && (
-          <div className="p-6">
-            <ActivityTimeline
-              worktreeId={issue.worktree_id}
-              issueId={issue.id}
+        {/* Time Tracking */}
+        <TimeTracking
+          issue={issue}
+          worktreeId={issue.worktree_id}
+          boardId={issue.board_id}
+        />
+
+        {/* Dependencies Panel */}
+        <DependenciesPanel
+          issue={issue}
+          worktreeId={issue.worktree_id}
+          boardId={issue.board_id}
+          allIssues={allIssues}
+        />
+
+        {/* Watchers Panel */}
+        <WatchersPanel
+          issue={issue}
+          worktreeId={issue.worktree_id}
+          boardId={issue.board_id}
+          currentUser={{
+            id: 'user-1',
+            name: 'Stuart Chen',
+            avatar: ''
+          }}
+        />
+
+        {/* Activity Timeline */}
+        <div
+          className="bg-white rounded-lg p-6 shadow-warm-md"
+          style={{
+            borderColor: '#E8E0D5',
+            borderWidth: '1px',
+            borderStyle: 'solid'
+          }}
+        >
+          <h3 className="text-lg font-semibold mb-4" style={{ color: '#2F241B' }}>
+            Activity
+          </h3>
+          <ActivityTimeline
+            worktreeId={issue.worktree_id}
+            issueId={issue.id}
+          />
+        </div>
+
+        {/* Comments */}
+        <div
+          className="bg-white rounded-lg p-6 shadow-warm-md"
+          style={{
+            borderColor: '#E8E0D5',
+            borderWidth: '1px',
+            borderStyle: 'solid'
+          }}
+        >
+          <h3 className="text-lg font-semibold mb-4" style={{ color: '#2F241B' }}>
+            Comments
+          </h3>
+
+          {/* Add new comment section */}
+          <div className="mb-6">
+            <CommentForm
+              onSubmit={handleAddComment}
+              placeholder="Share your thoughts... (Markdown supported)"
+              submitLabel="Add Comment"
             />
           </div>
-        )}
 
-        {activeTab === 'comments' && (
-          <div className="p-6 space-y-6">
-            {/* Add new comment section */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Add Comment</h3>
-              <CommentForm
-                onSubmit={handleAddComment}
-                placeholder="Share your thoughts... (Markdown supported)"
-                submitLabel="Add Comment"
+          {/* Comments list section */}
+          <div>
+            <div className="text-sm font-medium mb-3" style={{ color: '#6B5D52' }}>
+              {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
+            </div>
+            {commentsLoading ? (
+              <div className="text-center py-8" style={{ color: '#A39686' }}>
+                <p className="text-sm">Loading comments...</p>
+              </div>
+            ) : (
+              <CommentsList
+                comments={comments}
+                onUpdate={handleUpdateComment}
+                onDelete={handleDeleteComment}
               />
-            </div>
-
-            {/* Comments list section */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                Comments ({comments.length})
-              </h3>
-              {commentsLoading ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p className="text-sm">Loading comments...</p>
-                </div>
-              ) : (
-                <CommentsList
-                  comments={comments}
-                  onUpdate={handleUpdateComment}
-                  onDelete={handleDeleteComment}
-                />
-              )}
-            </div>
+            )}
           </div>
-        )}
+        </div>
 
-        {activeTab === 'documentation' && (
-          <div className="p-6">
+        {/* Linked Implementations */}
+        <LinkedImplementations issue={issue} />
+
+        {/* Engagement Analytics */}
+        <EngagementPanel
+          worktreeId={issue.worktree_id}
+          boardId={issue.board_id}
+          issueId={issue.id}
+        />
+
+        {/* Documentation */}
+        {issue.documentation && (
+          <div
+            className="bg-white rounded-lg p-6 shadow-warm-md"
+            style={{
+              borderColor: '#E8E0D5',
+              borderWidth: '1px',
+              borderStyle: 'solid'
+            }}
+          >
+            <h3 className="text-lg font-semibold mb-4" style={{ color: '#2F241B' }}>
+              Documentation
+            </h3>
             <DocumentationPanel
               worktreeId={issue.worktree_id}
               issueId={issue.id}
             />
           </div>
         )}
+
+        {/* Metadata */}
+        <div
+          className="bg-white rounded-lg p-6 shadow-warm-md"
+          style={{
+            borderColor: '#E8E0D5',
+            borderWidth: '1px',
+            borderStyle: 'solid'
+          }}
+        >
+          <h3 className="text-lg font-semibold mb-4" style={{ color: '#2F241B' }}>
+            Metadata
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <label className="text-xs font-semibold block mb-1" style={{ color: '#A39686' }}>
+                Created
+              </label>
+              <p style={{ color: '#2F241B' }}>
+                {new Date(issue.metadata?.created_at || (issue as any).created_at).toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold block mb-1" style={{ color: '#A39686' }}>
+                Updated
+              </label>
+              <p style={{ color: '#2F241B' }}>
+                {new Date(issue.metadata?.updated_at || (issue as any).updated_at).toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold block mb-1" style={{ color: '#A39686' }}>
+                Board
+              </label>
+              <p style={{ color: '#2F241B' }}>{issue.board_id}</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold block mb-1" style={{ color: '#A39686' }}>
+                Worktree
+              </label>
+              <p style={{ color: '#2F241B' }}>{issue.worktree_id}</p>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

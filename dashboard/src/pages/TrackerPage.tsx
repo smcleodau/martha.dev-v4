@@ -341,7 +341,7 @@ export function TrackerPage() {
     if (filters.labels.length > 0) {
       filtered = Object.fromEntries(
         Object.entries(filtered).filter(([_, issue]) =>
-          issue.labels.some(label => filters.labels.includes(label))
+          issue.labels && issue.labels.some(label => filters.labels.includes(label))
         )
       );
     }

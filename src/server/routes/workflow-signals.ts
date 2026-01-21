@@ -255,8 +255,63 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
         source: 'http',
       });
 
+      // Write evidence to database (using dynamic import to avoid blocking server startup)
+      try {
+        const { query } = await import('../../database/client.js');
+        const { randomUUID } = await import('crypto');
+
+        // Extract issue ID from workflow ID (format: issue-MTH-002-...)
+        // Match pattern: issue-{LETTERS}-{NUMBER}-{rest}
+        const issueIdMatch = workflowId.match(/^issue-([A-Z]+-\d+)/);
+        const issueId = issueIdMatch ? issueIdMatch[1] : workflowId.replace(/^issue-/, '').split('-').slice(0, 2).join('-');
+
+        await query(
+          `INSERT INTO evidence_events (
+            event_id, issue_id, stage, evidence_type, timestamp,
+            evidence_data, quality_score, validation_status, workflow_id, agent_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            randomUUID(),
+            issueId,
+            'DEVELOPMENT',
+            'commits',
+            new Date().toISOString(),
+            JSON.stringify({
+              commits: [{
+                sha: payload.commitSha,
+                message: payload.commitMessage,
+                filesChanged: payload.filesChanged,
+                linesAdded: payload.linesAdded || 0,
+                linesDeleted: payload.linesDeleted || 0,
+                timestamp: new Date().toISOString(),
+              }]
+            }),
+            85, // quality score
+            'valid',
+            workflowId,
+            payload.agentId || null,
+          ]
+        );
+
+        logger.info('Evidence written for commit', { workflowId, issueId, commitSha: payload.commitSha });
+      } catch (evidenceError: any) {
+        logger.error('Failed to write evidence', {
+          workflowId,
+          error: evidenceError.message,
+        });
+        // Don't fail the signal if evidence writing fails
+      }
+
+      // Transform payload to match workflow signal definition
+      // Workflow expects: { sha: string; message: string; files: string[] }
+      const workflowPayload = {
+        sha: payload.commitSha,
+        message: payload.commitMessage,
+        files: [] as string[], // We only have count, not file names
+      };
+
       // Forward to workflow
-      await signalWorkflow(workflowId, 'commitMade', [payload]);
+      await signalWorkflow(workflowId, 'commitMade', [workflowPayload]);
 
       return {
         success: true,
@@ -382,6 +437,65 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
         source: 'http',
       });
 
+      // Write evidence to database (using dynamic import to avoid blocking server startup)
+      try {
+        const { query } = await import('../../database/client.js');
+        const { randomUUID } = await import('crypto');
+
+        // Extract issue ID from workflow ID (format: issue-MTH-002-...)
+        // Match pattern: issue-{LETTERS}-{NUMBER}-{rest}
+        const issueIdMatch = workflowId.match(/^issue-([A-Z]+-\d+)/);
+        const issueId = issueIdMatch ? issueIdMatch[1] : workflowId.replace(/^issue-/, '').split('-').slice(0, 2).join('-');
+
+        const testData = {
+          testResults: {
+            passed: payload.testsPassed,
+            failed: payload.testsFailed,
+            skipped: payload.testsSkipped || 0,
+            coverage: payload.coverage,
+            details: payload.details,
+          }
+        };
+
+        // Calculate quality score based on test results
+        const totalTests = payload.testsPassed + payload.testsFailed + (payload.testsSkipped || 0);
+        const passRate = totalTests > 0 ? (payload.testsPassed / totalTests) * 100 : 0;
+        const qualityScore = Math.round(passRate * (payload.coverage ? (payload.coverage / 100) : 1));
+
+        await query(
+          `INSERT INTO evidence_events (
+            event_id, issue_id, stage, evidence_type, timestamp,
+            evidence_data, quality_score, validation_status, workflow_id, agent_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            randomUUID(),
+            issueId,
+            'TESTING',
+            'test_results',
+            new Date().toISOString(),
+            JSON.stringify(testData),
+            qualityScore,
+            payload.testsFailed === 0 ? 'valid' : 'invalid',
+            workflowId,
+            payload.agentId || null,
+          ]
+        );
+
+        logger.info('Evidence written for test results', {
+          workflowId,
+          issueId,
+          passed: payload.testsPassed,
+          failed: payload.testsFailed,
+          qualityScore,
+        });
+      } catch (evidenceError: any) {
+        logger.error('Failed to write evidence', {
+          workflowId,
+          error: evidenceError.message,
+        });
+        // Don't fail the signal if evidence writing fails
+      }
+
       // Forward to workflow
       await signalWorkflow(workflowId, 'testResults', [payload]);
 
@@ -393,6 +507,104 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
       };
     } catch (error: any) {
       logger.error('Failed to forward test-results signal', {
+        workflowId,
+        error: error.message,
+      });
+
+      reply.status(500);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  /**
+   * Review Approved Signal
+   * POST /api/v1/workflows/:workflowId/signals/reviewApproved
+   *
+   * Sent when code review is completed and approved.
+   * Writes review evidence to evidence_events table.
+   */
+  server.post<{
+    Params: { workflowId: string };
+    Body: any;
+  }>('/api/v1/workflows/:workflowId/signals/reviewApproved', async (request, reply) => {
+    const { workflowId } = request.params;
+    const payload = request.body || {};
+
+    logger.info('Review approved signal received', {
+      workflowId,
+      payload,
+    });
+
+    try {
+      // Write telemetry
+      await telemetryWriter.writeEvent({
+        workflowId,
+        workflowType: 'IssueLifecycleWorkflow',
+        eventType: 'review_approved_http',
+        eventCategory: 'review',
+        severity: 'info',
+        payload,
+        source: 'http',
+      });
+
+      // Write review evidence to database
+      try {
+        const { query } = await import('../../database/client.js');
+        const { randomUUID } = await import('crypto');
+
+        // Extract issue ID from workflow ID
+        const issueIdMatch = workflowId.match(/^issue-([A-Z]+-\d+)/);
+        const issueId = issueIdMatch ? issueIdMatch[1] : workflowId.replace(/^issue-/, '').split('-').slice(0, 2).join('-');
+
+        await query(
+          `INSERT INTO evidence_events (
+            event_id, issue_id, stage, evidence_type, timestamp,
+            evidence_data, quality_score, validation_status, workflow_id, agent_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            randomUUID(),
+            issueId,
+            'REVIEW',
+            'reviews',
+            new Date().toISOString(),
+            JSON.stringify({
+              reviews: [{
+                reviewer: payload.reviewer || 'automated',
+                status: 'approved',
+                timestamp: new Date().toISOString(),
+                comments: payload.comments || 'Review approved',
+              }]
+            }),
+            100, // quality score for approved review
+            'valid',
+            workflowId,
+            payload.agentId || null,
+          ]
+        );
+
+        logger.info('Review evidence written', { workflowId, issueId });
+      } catch (evidenceError: any) {
+        logger.error('Failed to write review evidence', {
+          workflowId,
+          error: evidenceError.message,
+        });
+        // Don't fail the signal if evidence writing fails
+      }
+
+      // Forward to workflow
+      await signalWorkflow(workflowId, 'reviewApproved', [payload]);
+
+      return {
+        success: true,
+        workflowId,
+        signalName: 'reviewApproved',
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      logger.error('Failed to forward review-approved signal', {
         workflowId,
         error: error.message,
       });
@@ -455,6 +667,62 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
       };
     } catch (error: any) {
       logger.error('Failed to forward block signal', {
+        workflowId,
+        error: error.message,
+      });
+
+      reply.status(500);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  /**
+   * Force Completion Signal
+   * POST /api/v1/workflows/:workflowId/signals/force-completion
+   *
+   * Used to force completion of workflows that are stuck in a completed state
+   * but haven't properly signaled Temporal of their completion.
+   */
+  server.post<{
+    Params: { workflowId: string };
+  }>('/api/v1/workflows/:workflowId/signals/force-completion', async (request, reply) => {
+    const { workflowId } = request.params;
+
+    logger.warn('Force completion signal received', {
+      workflowId,
+    });
+
+    try {
+      // Write telemetry
+      await telemetryWriter.writeEvent({
+        workflowId,
+        workflowType: 'IssueLifecycleWorkflow',
+        eventType: 'force_completion_http',
+        eventCategory: 'workflow',
+        severity: 'warning',
+        payload: { workflowId },
+        source: 'http',
+      });
+
+      // Forward to workflow
+      await signalWorkflow(workflowId, 'forceCompletion', []);
+
+      logger.info('Force completion signal forwarded to workflow', {
+        workflowId,
+      });
+
+      return {
+        success: true,
+        workflowId,
+        signalName: 'forceCompletion',
+        message: 'Force completion signal sent',
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      logger.error('Failed to forward force completion signal', {
         workflowId,
         error: error.message,
       });

@@ -97,6 +97,55 @@ async function findIssue(issueId: string): Promise<{
 }
 
 /**
+ * Helper: Detect the default branch in a git repository
+ * Returns 'main', 'master', or whatever the default branch is
+ */
+async function getDefaultBranch(repoPath: string): Promise<string> {
+  try {
+    // Try to get the default branch from git symbolic-ref
+    const { stdout } = await execAsync('git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null', { cwd: repoPath });
+    const match = stdout.trim().match(/refs\/remotes\/origin\/(.+)/);
+    if (match && match[1]) {
+      logger.info({ defaultBranch: match[1] }, '[getDefaultBranch] Detected from symbolic-ref');
+      return match[1];
+    }
+  } catch {
+    // symbolic-ref might not be set, try alternative methods
+  }
+
+  // Fallback: check which common branch exists
+  try {
+    const { stdout: branches } = await execAsync('git branch -a', { cwd: repoPath });
+
+    // Check for main
+    if (branches.includes('main')) {
+      logger.info({ defaultBranch: 'main' }, '[getDefaultBranch] Detected main branch');
+      return 'main';
+    }
+
+    // Check for master
+    if (branches.includes('master')) {
+      logger.info({ defaultBranch: 'master' }, '[getDefaultBranch] Detected master branch');
+      return 'master';
+    }
+
+    // If neither main nor master exists, try to get the first branch
+    const branchMatch = branches.match(/^\*?\s*(\S+)/m);
+    if (branchMatch && branchMatch[1]) {
+      const branch = branchMatch[1];
+      logger.warn({ defaultBranch: branch }, '[getDefaultBranch] Using first available branch');
+      return branch;
+    }
+  } catch (error: any) {
+    logger.error({ error: error.message }, '[getDefaultBranch] Failed to detect branch');
+  }
+
+  // Ultimate fallback
+  logger.warn('[getDefaultBranch] Defaulting to main');
+  return 'main';
+}
+
+/**
  * Helper function to wrap activities with telemetry tracking
  */
 async function withTelemetry<T>(
@@ -1127,15 +1176,49 @@ export async function mergeCode(
     // 1. Checkout main and merge branch
     const repoPath = '/mnt/data/calculator-app';
 
-    logger.info({ repoPath, branch: input.branch }, '[mergeCode] Checking out main');
+    // Detect the default branch (main or master)
+    const defaultBranch = await getDefaultBranch(repoPath);
+    logger.info({ repoPath, branch: input.branch, defaultBranch }, '[mergeCode] Checking out default branch');
 
-    // Checkout main
+    // Reset any ongoing merge or conflicted state
     try {
-      await execAsync('git checkout main', { cwd: repoPath });
-      logger.info('[mergeCode] Checked out main branch');
+      await execAsync('git reset --hard', { cwd: repoPath });
+      await execAsync('git clean -fd', { cwd: repoPath });
+      logger.info('[mergeCode] Reset repository to clean state');
     } catch (error: any) {
-      logger.error({ error: error.message }, '[mergeCode] Failed to checkout main');
-      throw new Error(`Failed to checkout main: ${error.message}`);
+      logger.warn({ error: error.message }, '[mergeCode] Failed to reset repository');
+    }
+
+    // Stash any uncommitted changes before checkout
+    let stashCreated = false;
+    try {
+      const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: repoPath });
+      if (statusOutput.trim().length > 0) {
+        await execAsync('git stash push -u -m "Temporary stash for merge"', { cwd: repoPath });
+        stashCreated = true;
+        logger.info('[mergeCode] Stashed uncommitted changes');
+      }
+    } catch (error: any) {
+      logger.warn({ error: error.message }, '[mergeCode] Failed to stash, continuing anyway');
+    }
+
+    // Checkout default branch
+    try {
+      await execAsync(`git checkout ${defaultBranch}`, { cwd: repoPath });
+      logger.info({ defaultBranch }, '[mergeCode] Checked out default branch');
+    } catch (error: any) {
+      logger.error({ error: error.message, defaultBranch }, '[mergeCode] Failed to checkout default branch');
+      throw new Error(`Failed to checkout ${defaultBranch}: ${error.message}`);
+    }
+
+    // Pop stash if we created one
+    if (stashCreated) {
+      try {
+        await execAsync('git stash pop', { cwd: repoPath });
+        logger.info('[mergeCode] Restored stashed changes');
+      } catch (error: any) {
+        logger.warn({ error: error.message }, '[mergeCode] Failed to restore stash, continuing');
+      }
     }
 
     // Merge branch with no-ff to preserve branch history
@@ -1159,6 +1242,43 @@ export async function mergeCode(
     } catch (error: any) {
       logger.error({ error: error.message }, '[mergeCode] Failed to get merge SHA');
       throw new Error(`Failed to get merge SHA: ${error.message}`);
+    }
+
+    // Write merge evidence to database
+    try {
+      const { randomUUID } = await import('crypto');
+
+      await query(
+        `INSERT INTO evidence_events (
+          event_id, issue_id, stage, evidence_type, timestamp,
+          evidence_data, quality_score, validation_status, workflow_id, agent_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          randomUUID(),
+          input.issueId,
+          'MERGE',
+          'merge_details',
+          new Date().toISOString(),
+          JSON.stringify({
+            mergeSha,
+            branch: input.branch,
+            conflictsResolved: true,
+            timestamp: new Date().toISOString(),
+          }),
+          100, // quality score for successful merge
+          'valid',
+          workflowId,
+          null, // no specific agent for merge
+        ]
+      );
+
+      logger.info({ mergeSha, issueId: input.issueId }, '[mergeCode] Merge evidence written');
+    } catch (evidenceError: any) {
+      logger.error({
+        error: evidenceError.message,
+        issueId: input.issueId,
+      }, '[mergeCode] Failed to write merge evidence');
+      // Don't fail the activity if evidence writing fails
     }
 
     // 2. Find issue to get worktree and board

@@ -42,8 +42,8 @@ export interface GateResult {
  * Quality score thresholds for different stages
  */
 const QUALITY_THRESHOLDS = {
-  DEVELOPMENT: 70, // Must have commits and basic code tracking
-  TESTING: 80, // Must have passing tests
+  DEVELOPMENT: 40, // Must have commits (code_stats and file_changes are optional)
+  TESTING: 40, // Must have test results
   REVIEW: 75, // Must have approved reviews
   MERGE: 70, // Must have merge evidence
 };

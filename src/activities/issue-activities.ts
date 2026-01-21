@@ -18,6 +18,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AgentContextBuilder, determineIssueType, extractAcceptanceCriteria } from '../types/agent-context.js';
 import { claudeAgentSpawner } from '../services/ClaudeAgentSpawner.js';
+import { appendEvidenceByIssueId, type IssueEvidenceEvent } from '../tracker/services/evidence-manager.js';
 
 const execAsync = promisify(exec);
 
@@ -1248,23 +1249,27 @@ export async function mergeCode(
     try {
       const { randomUUID } = await import('crypto');
 
+      const eventId = randomUUID();
+      const timestamp = new Date().toISOString();
+      const mergeData = {
+        mergeSha,
+        branch: input.branch,
+        conflictsResolved: true,
+        timestamp,
+      };
+
       await query(
         `INSERT INTO evidence_events (
           event_id, issue_id, stage, evidence_type, timestamp,
           evidence_data, quality_score, validation_status, workflow_id, agent_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
-          randomUUID(),
+          eventId,
           input.issueId,
           'MERGE',
           'merge_details',
-          new Date().toISOString(),
-          JSON.stringify({
-            mergeSha,
-            branch: input.branch,
-            conflictsResolved: true,
-            timestamp: new Date().toISOString(),
-          }),
+          timestamp,
+          JSON.stringify(mergeData),
           100, // quality score for successful merge
           'valid',
           workflowId,
@@ -1273,6 +1278,22 @@ export async function mergeCode(
       );
 
       logger.info({ mergeSha, issueId: input.issueId }, '[mergeCode] Merge evidence written');
+
+      // Also append evidence to issue JSON file
+      const evidenceEvent: IssueEvidenceEvent = {
+        event_id: eventId,
+        stage: 'MERGE',
+        evidence_type: 'merge_details',
+        timestamp,
+        evidence_data: mergeData,
+        quality_score: 100,
+        validation_status: 'valid',
+        workflow_id: workflowId,
+        agent_id: null,
+      };
+
+      appendEvidenceByIssueId(input.issueId, evidenceEvent);
+
     } catch (evidenceError: any) {
       logger.error({
         error: evidenceError.message,

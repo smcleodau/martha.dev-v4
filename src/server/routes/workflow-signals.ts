@@ -16,6 +16,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { signalWorkflow } from '../../temporal/client.js';
 import { createLogger } from '../../utils/logger.js';
 import { telemetryWriter } from '../../services/TelemetryWriter.js';
+import { appendEvidenceByIssueId, type IssueEvidenceEvent } from '../../tracker/services/evidence-manager.js';
 
 const logger = createLogger({ module: 'workflow-signals' });
 
@@ -265,27 +266,31 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
         const issueIdMatch = workflowId.match(/^issue-([A-Z]+-\d+)/);
         const issueId = issueIdMatch ? issueIdMatch[1] : workflowId.replace(/^issue-/, '').split('-').slice(0, 2).join('-');
 
+        const eventId = randomUUID();
+        const timestamp = new Date().toISOString();
+        const evidenceData = {
+          commits: [{
+            sha: payload.commitSha,
+            message: payload.commitMessage,
+            filesChanged: payload.filesChanged,
+            linesAdded: payload.linesAdded || 0,
+            linesDeleted: payload.linesDeleted || 0,
+            timestamp,
+          }]
+        };
+
         await query(
           `INSERT INTO evidence_events (
             event_id, issue_id, stage, evidence_type, timestamp,
             evidence_data, quality_score, validation_status, workflow_id, agent_id
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
-            randomUUID(),
+            eventId,
             issueId,
             'DEVELOPMENT',
             'commits',
-            new Date().toISOString(),
-            JSON.stringify({
-              commits: [{
-                sha: payload.commitSha,
-                message: payload.commitMessage,
-                filesChanged: payload.filesChanged,
-                linesAdded: payload.linesAdded || 0,
-                linesDeleted: payload.linesDeleted || 0,
-                timestamp: new Date().toISOString(),
-              }]
-            }),
+            timestamp,
+            JSON.stringify(evidenceData),
             85, // quality score
             'valid',
             workflowId,
@@ -294,6 +299,22 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
         );
 
         logger.info('Evidence written for commit', { workflowId, issueId, commitSha: payload.commitSha });
+
+        // Also append evidence to issue JSON file
+        const evidenceEvent: IssueEvidenceEvent = {
+          event_id: eventId,
+          stage: 'DEVELOPMENT',
+          evidence_type: 'commits',
+          timestamp,
+          evidence_data: evidenceData,
+          quality_score: 85,
+          validation_status: 'valid',
+          workflow_id: workflowId,
+          agent_id: payload.agentId || null,
+        };
+
+        appendEvidenceByIssueId(issueId, evidenceEvent);
+
       } catch (evidenceError: any) {
         logger.error('Failed to write evidence', {
           workflowId,
@@ -447,6 +468,8 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
         const issueIdMatch = workflowId.match(/^issue-([A-Z]+-\d+)/);
         const issueId = issueIdMatch ? issueIdMatch[1] : workflowId.replace(/^issue-/, '').split('-').slice(0, 2).join('-');
 
+        const eventId = randomUUID();
+        const timestamp = new Date().toISOString();
         const testData = {
           testResults: {
             passed: payload.testsPassed,
@@ -461,6 +484,7 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
         const totalTests = payload.testsPassed + payload.testsFailed + (payload.testsSkipped || 0);
         const passRate = totalTests > 0 ? (payload.testsPassed / totalTests) * 100 : 0;
         const qualityScore = Math.round(passRate * (payload.coverage ? (payload.coverage / 100) : 1));
+        const validationStatus = payload.testsFailed === 0 ? 'valid' : 'invalid';
 
         await query(
           `INSERT INTO evidence_events (
@@ -468,14 +492,14 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
             evidence_data, quality_score, validation_status, workflow_id, agent_id
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
-            randomUUID(),
+            eventId,
             issueId,
             'TESTING',
             'test_results',
-            new Date().toISOString(),
+            timestamp,
             JSON.stringify(testData),
             qualityScore,
-            payload.testsFailed === 0 ? 'valid' : 'invalid',
+            validationStatus,
             workflowId,
             payload.agentId || null,
           ]
@@ -488,6 +512,22 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
           failed: payload.testsFailed,
           qualityScore,
         });
+
+        // Also append evidence to issue JSON file
+        const evidenceEvent: IssueEvidenceEvent = {
+          event_id: eventId,
+          stage: 'TESTING',
+          evidence_type: 'test_results',
+          timestamp,
+          evidence_data: testData,
+          quality_score: qualityScore,
+          validation_status: validationStatus,
+          workflow_id: workflowId,
+          agent_id: payload.agentId || null,
+        };
+
+        appendEvidenceByIssueId(issueId, evidenceEvent);
+
       } catch (evidenceError: any) {
         logger.error('Failed to write evidence', {
           workflowId,
@@ -559,25 +599,29 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
         const issueIdMatch = workflowId.match(/^issue-([A-Z]+-\d+)/);
         const issueId = issueIdMatch ? issueIdMatch[1] : workflowId.replace(/^issue-/, '').split('-').slice(0, 2).join('-');
 
+        const eventId = randomUUID();
+        const timestamp = new Date().toISOString();
+        const reviewData = {
+          reviews: [{
+            reviewer: payload.reviewer || 'automated',
+            status: 'approved',
+            timestamp,
+            comments: payload.comments || 'Review approved',
+          }]
+        };
+
         await query(
           `INSERT INTO evidence_events (
             event_id, issue_id, stage, evidence_type, timestamp,
             evidence_data, quality_score, validation_status, workflow_id, agent_id
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
-            randomUUID(),
+            eventId,
             issueId,
             'REVIEW',
             'reviews',
-            new Date().toISOString(),
-            JSON.stringify({
-              reviews: [{
-                reviewer: payload.reviewer || 'automated',
-                status: 'approved',
-                timestamp: new Date().toISOString(),
-                comments: payload.comments || 'Review approved',
-              }]
-            }),
+            timestamp,
+            JSON.stringify(reviewData),
             100, // quality score for approved review
             'valid',
             workflowId,
@@ -586,6 +630,22 @@ export const registerWorkflowSignalRoutes: FastifyPluginAsync = async (server) =
         );
 
         logger.info('Review evidence written', { workflowId, issueId });
+
+        // Also append evidence to issue JSON file
+        const evidenceEvent: IssueEvidenceEvent = {
+          event_id: eventId,
+          stage: 'REVIEW',
+          evidence_type: 'reviews',
+          timestamp,
+          evidence_data: reviewData,
+          quality_score: 100,
+          validation_status: 'valid',
+          workflow_id: workflowId,
+          agent_id: payload.agentId || null,
+        };
+
+        appendEvidenceByIssueId(issueId, evidenceEvent);
+
       } catch (evidenceError: any) {
         logger.error('Failed to write review evidence', {
           workflowId,

@@ -3,8 +3,9 @@ import { z } from 'zod';
 
 import logger from '../utils/logger.js';
 
-// Load environment variables from .env.local
-config({ path: '.env.local' });
+// Load environment variables from appropriate .env file
+const envFile = process.env.NODE_ENV === 'test' ? '.env.test' : '.env.local';
+config({ path: envFile });
 
 /**
  * Configuration schema with Zod validation
@@ -141,13 +142,16 @@ function loadConfig() {
     return validated;
   } catch (error) {
     if (error instanceof z.ZodError) {
+      const errorDetails = error.errors.map((e) => ({
+        path: e.path.join('.'),
+        message: e.message,
+      }));
       logger.error('Configuration validation failed', {
-        errors: error.errors.map((e) => ({
-          path: e.path.join('.'),
-          message: e.message,
-        })),
+        errors: errorDetails,
       });
-      throw new Error('Invalid configuration. Check .env.local file.');
+      // Also log to console for test debugging
+      console.error('Config validation errors:', JSON.stringify(errorDetails, null, 2));
+      throw new Error(`Invalid configuration. Check ${envFile} file. Errors: ${JSON.stringify(errorDetails)}`);
     }
     throw error;
   }

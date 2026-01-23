@@ -13,7 +13,8 @@ config({ path: '.env.local' });
 import { Worker, NativeConnection } from '@temporalio/worker';
 import { loadTemporalConfig } from './config.js';
 import logger from '../utils/logger.js';
-import * as activities from '../activities/issue-activities.js';
+import * as issueActivities from '../activities/issue-activities.js';
+import * as gateActivities from '../activities/gate-activities.js';
 import * as fs from 'fs';
 import { sinks } from './telemetry-sink.js';
 
@@ -62,7 +63,7 @@ export async function startWorker(): Promise<Worker> {
       namespace: temporalConfig.namespace,
       taskQueue: temporalConfig.taskQueue,
       workflowsPath: new URL('../workflows', import.meta.url).pathname,
-      activities,
+      activities: { ...issueActivities, ...gateActivities },
       maxConcurrentWorkflowTaskExecutions:
         temporalConfig.maxConcurrentWorkflowExecutions,
       maxConcurrentActivityTaskExecutions:

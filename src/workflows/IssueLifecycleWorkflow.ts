@@ -195,6 +195,8 @@ export const reviewApprovedSignal = defineSignal('reviewApproved');
 
 export const blockSignal = defineSignal<[{ reason: string }]>('block');
 
+export const forceCompletionSignal = defineSignal('forceCompletion');
+
 // Queries
 export const getStatusQuery = defineQuery<string>('getStatus');
 export const getMetricsQuery = defineQuery<WorkflowMetrics>('getMetrics');
@@ -222,6 +224,7 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
   let agentCompleted = false;
   let testsCompleted = false;
   let reviewApproved = false;
+  let forceComplete = false;
 
   setHandler(agentStartedSignal, ({ agentId, startTime }) => {
     state.agentId = agentId;
@@ -250,7 +253,7 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
       sha,
       message,
       timestamp: Date.now(),
-      files,
+      files: files || [],
     };
     state.commits.push(commit);
     state.metrics.totalCommits++;
@@ -259,7 +262,8 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
       state.metrics.timeToFirstCommit = Date.now() - state.startTime;
     }
 
-    addHistory(state, 'Commit made', { sha, message, filesCount: files.length });
+    const filesCount = files ? files.length : 0;
+    addHistory(state, 'Commit made', { sha, message, filesCount });
 
     // Log signal handling
     const info = workflowInfo();
@@ -272,7 +276,7 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
         issueId: issue.id,
         sha,
         commitMessage: message,
-        filesCount: files.length,
+        filesCount,
         totalCommits: state.metrics.totalCommits,
         stage: state.stage,
         isFirstCommit: state.metrics.totalCommits === 1,
@@ -365,6 +369,25 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
         reason,
         stage: state.stage,
         totalCommits: state.metrics.totalCommits,
+      },
+      source: 'temporal',
+    });
+  });
+
+  setHandler(forceCompletionSignal, () => {
+    forceComplete = true;
+    addHistory(state, 'Force completion signal received', {});
+
+    // Log signal handling
+    const info = workflowInfo();
+    telemetry.writeEvent({
+      eventType: 'force_completion_handled',
+      eventCategory: 'signal',
+      workflowId: info.workflowId,
+      workflowType: info.workflowType,
+      payload: {
+        issueId: issue.id,
+        stage: state.stage,
       },
       source: 'temporal',
     });
@@ -610,6 +633,8 @@ export async function IssueLifecycleWorkflow(issue: IssueInput): Promise<void> {
     });
 
     addHistory(state, 'Workflow completed successfully', { totalDuration });
+
+    return; // Explicitly signal workflow completion to Temporal
   } catch (error: any) {
     // SAGA Compensation
     const failedFromStage = state.stage;

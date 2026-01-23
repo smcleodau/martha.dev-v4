@@ -38,6 +38,14 @@
     "worker:build": "swc src/temporal -d dist/temporal --copy-files && swc src/workflows -d dist/workflows --copy-files && swc src/activities -d dist/activities --copy-files",
     "worker:start": "node dist/temporal/worker.js",
     "temporal:client": "tsx -e 'import { getTemporalClient } from \"./src/temporal/client.js\"; getTemporalClient().then(() => console.log(\"Connected!\"))'",
+    "verify:all": "tsx scripts/autonomous-verify/run-all.ts",
+    "verify:infra": "tsx scripts/autonomous-verify/phase1-infrastructure.ts",
+    "verify:unit": "tsx scripts/autonomous-verify/phase2-unit-tests.ts",
+    "verify:integration": "tsx scripts/autonomous-verify/phase3-integration.ts",
+    "verify:load": "tsx scripts/autonomous-verify/phase5-load-testing.ts",
+    "verify:errors": "tsx scripts/autonomous-verify/phase6-error-scenarios.ts",
+    "verify:observability": "tsx scripts/autonomous-verify/phase7-observability.ts",
+    "verify:report": "tsx scripts/autonomous-verify/phase8-reporting.ts",
     "prepare": "husky install || true"
   },
   "keywords": [

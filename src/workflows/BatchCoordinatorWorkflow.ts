@@ -378,6 +378,8 @@ export async function BatchCoordinatorWorkflow(
         `Success rate: ${successRate.toFixed(2)}%. Duration: ${totalDuration}ms`
     );
   }
+
+  return; // Explicitly signal workflow completion to Temporal
 }
 
 /**

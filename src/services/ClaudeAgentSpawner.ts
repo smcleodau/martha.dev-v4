@@ -16,6 +16,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createLogger } from '../utils/logger.js';
 import type { AgentContext } from '../types/agent-context.js';
+import { SignalSender } from './SignalSender.js';
 
 const logger = createLogger({ module: 'agent-spawner' });
 
@@ -37,6 +38,12 @@ export interface AgentSpawnResult {
  * Claude Agent Spawner
  */
 export class ClaudeAgentSpawner {
+  private signalSender: SignalSender;
+
+  constructor(apiUrl: string) {
+    this.signalSender = new SignalSender(apiUrl);
+  }
+
   /**
    * Spawn a Claude agent with full context
    */
@@ -215,10 +222,11 @@ Full context available at: ${context.metadata.workDirectory}/context.json
     const stderrStream = await fs.open(stderrPath, 'w');
 
     // Spawn Claude CLI
-    const process = spawn(
+    const childProcess = spawn(
       CLAUDE_CLI_PATH,
       [
         '--print',
+        '--verbose',
         '--output-format', 'stream-json',
         '--add-dir', context.git.repoPath,
         '--agent', 'developer',
@@ -241,15 +249,15 @@ Full context available at: ${context.metadata.workDirectory}/context.json
     );
 
     // Handle process errors
-    process.on('error', (error) => {
+    childProcess.on('error', (error) => {
       logger.error('Agent process error', {
         agentId: context.agentId,
         error: error.message,
       });
     });
 
-    // Log process exit
-    process.on('exit', (code, signal) => {
+    // Log process exit and send completion signal
+    childProcess.on('exit', async (code, signal) => {
       logger.info('Agent process exited', {
         agentId: context.agentId,
         code,
@@ -259,12 +267,18 @@ Full context available at: ${context.metadata.workDirectory}/context.json
       // Close log streams
       stdoutStream.close();
       stderrStream.close();
+
+      // Send agent-completed signal
+      await this.sendCompletionSignal(context, workDir, code, signal);
     });
 
     // Unref to allow parent to exit
-    process.unref();
+    childProcess.unref();
 
-    return process;
+    // Send agent-started signal immediately
+    await this.sendStartedSignal(context);
+
+    return childProcess;
   }
 
   /**
@@ -299,6 +313,165 @@ Full context available at: ${context.metadata.workDirectory}/context.json
   }
 
   /**
+   * Send agent-started signal
+   */
+  private async sendStartedSignal(context: AgentContext): Promise<void> {
+    try {
+      await this.signalSender.sendAgentStarted(context.workflowId, {
+        agentId: context.agentId,
+        timestamp: new Date().toISOString(),
+        environment: {
+          worktree: context.worktree.name,
+          branch: context.git.branch,
+          issueId: context.issue.id,
+        },
+      });
+    } catch (error: any) {
+      logger.error('Failed to send agent-started signal', {
+        agentId: context.agentId,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Send agent-completed signal
+   */
+  private async sendCompletionSignal(
+    context: AgentContext,
+    workDirectory: string,
+    exitCode: number | null,
+    exitSignal: NodeJS.Signals | null
+  ): Promise<void> {
+    try {
+      // Parse the agent's stdout.log to get the result
+      const stdoutPath = path.join(workDirectory, 'stdout.log');
+      let success = exitCode === 0;
+      let summary = `Agent exited with code ${exitCode}`;
+
+      try {
+        const stdoutContent = await fs.readFile(stdoutPath, 'utf-8');
+        const lines = stdoutContent.trim().split('\n');
+
+        // Find the result line (last line should be the result JSON)
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const line = lines[i];
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.type === 'result') {
+              success = !parsed.is_error;
+              summary = parsed.result || summary;
+              break;
+            }
+          } catch {
+            // Not JSON, continue
+          }
+        }
+      } catch (error: any) {
+        logger.warn('Could not parse agent stdout', {
+          agentId: context.agentId,
+          error: error.message,
+        });
+      }
+
+      // Send commit signals for any commits on this branch
+      await this.sendCommitSignals(context);
+
+      // Small delay to ensure commit signals are processed before completion signal
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      await this.signalSender.sendAgentCompleted(context.workflowId, {
+        agentId: context.agentId,
+        success,
+        summary: summary.substring(0, 1000), // Limit summary length
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      logger.error('Failed to send agent-completed signal', {
+        agentId: context.agentId,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Send commit signals for all commits on the branch
+   */
+  private async sendCommitSignals(context: AgentContext): Promise<void> {
+    try {
+      const { execSync } = await import('child_process');
+
+      // Detect actual base branch (could be main or master)
+      let baseBranch = context.git.baseBranch;
+      try {
+        execSync(`cd "${context.git.repoPath}" && git rev-parse --verify ${baseBranch}`, { encoding: 'utf-8' });
+      } catch {
+        // Try alternate common base branch names
+        const alternates = ['master', 'main', 'develop'];
+        for (const alt of alternates) {
+          try {
+            execSync(`cd "${context.git.repoPath}" && git rev-parse --verify ${alt}`, { encoding: 'utf-8' });
+            baseBranch = alt;
+            logger.info('Using alternate base branch', { baseBranch });
+            break;
+          } catch {
+            // Continue trying
+          }
+        }
+      }
+
+      // Get commits on this branch that are not on base branch
+      const command = `cd "${context.git.repoPath}" && git log ${baseBranch}..${context.git.branch} --format="%H|%s|%aN" --reverse`;
+      const output = execSync(command, { encoding: 'utf-8' }).trim();
+
+      if (!output) {
+        logger.info('No commits found on branch', {
+          agentId: context.agentId,
+          branch: context.git.branch,
+        });
+        return;
+      }
+
+      const commits = output.split('\n').map(line => {
+        const [sha, message, author] = line.split('|');
+        return { sha, message, author };
+      });
+
+      logger.info('Found commits to report', {
+        agentId: context.agentId,
+        commitCount: commits.length,
+      });
+
+      // Send a signal for each commit
+      for (const commit of commits) {
+        // Get files changed in this commit
+        const filesCommand = `cd "${context.git.repoPath}" && git show --name-only --format="" ${commit.sha}`;
+        const filesOutput = execSync(filesCommand, { encoding: 'utf-8' }).trim();
+        const filesChanged = filesOutput ? filesOutput.split('\n').length : 0;
+
+        await this.signalSender.sendCommitMade(context.workflowId, {
+          agentId: context.agentId,
+          commitSha: commit.sha,
+          commitMessage: commit.message,
+          filesChanged,
+          timestamp: new Date().toISOString(),
+        });
+
+        logger.info('Sent commit signal', {
+          agentId: context.agentId,
+          commitSha: commit.sha.substring(0, 7),
+        });
+      }
+    } catch (error: any) {
+      logger.warn('Failed to send commit signals', {
+        agentId: context.agentId,
+        error: error.message,
+      });
+      // Don't throw - this is not critical
+    }
+  }
+
+  /**
    * Check if Claude CLI is available
    */
   async checkClaudeCLI(): Promise<boolean> {
@@ -314,5 +487,8 @@ Full context available at: ${context.metadata.workDirectory}/context.json
 
 /**
  * Singleton instance
+ * API URL comes from environment variable or defaults to localhost:21000
  */
-export const claudeAgentSpawner = new ClaudeAgentSpawner();
+export const claudeAgentSpawner = new ClaudeAgentSpawner(
+  process.env.MARTHA_API_URL || 'http://localhost:21000'
+);

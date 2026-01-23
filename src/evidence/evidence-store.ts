@@ -12,7 +12,7 @@
  * - Efficient time-series queries using TimescaleDB
  */
 
-import { query, getPool } from '../database/client.js';
+import { query } from '../database/client.js';
 import { createLogger } from '../utils/logger.js';
 import type {
   BaseEvidence,
@@ -317,7 +317,7 @@ export class EvidenceStore {
         validationErrors: row.validation_errors,
         workflowId: row.workflow_id,
         agentId: row.agent_id,
-        ...(row.evidence_data || {}),
+        evidenceData: row.evidence_data || {},
       }));
 
       logger.debug('Evidence query complete', {

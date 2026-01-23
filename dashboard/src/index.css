@@ -95,3 +95,265 @@
 * {
   @apply transition-colors duration-150;
 }
+
+/* ============================================
+   TRACKER CUSTOM STYLES
+   ============================================ */
+
+/* Hidden scrollbar for kanban columns */
+.kanban-scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.kanban-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Subtle scrollbar for main board */
+.kanban-scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(47, 36, 27, 0.1) transparent;
+}
+
+.kanban-scrollbar-subtle::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.kanban-scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: rgba(47, 36, 27, 0.1);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.kanban-scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+  background: rgba(47, 36, 27, 0.2);
+}
+
+/* Card hover effects */
+.kanban-card {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(47, 36, 27, 0.12);
+}
+
+.kanban-card:active {
+  transform: translateY(0);
+}
+
+/* Progress gradient */
+.progress-gradient-coral-gold {
+  background: linear-gradient(90deg, #D97F6F 0%, #E0B666 100%);
+}
+
+/* Focus ring */
+.focus-coral:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(217, 127, 111, 0.2);
+}
+
+/* Avatar stacking */
+.avatar-stack {
+  display: flex;
+  margin-left: -0.5rem;
+}
+
+.avatar-stack > * {
+  margin-left: -0.5rem;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(47, 36, 27, 0.1);
+}
+
+.avatar-stack > *:first-child {
+  margin-left: 0;
+}
+
+/* Dropdown animations */
+.dropdown-enter {
+  animation: scaleIn 0.15s ease-out;
+  transform-origin: top center;
+}
+
+/* Table row hover effects */
+.table-row-hover:hover {
+  background-color: #FAF8F5 !important;
+  transition: background-color 0.15s ease-in-out;
+}
+
+/* ============================================
+   ACCESSIBILITY STYLES (WCAG 2.1 AA)
+   ============================================ */
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Show on focus (for skip link) */
+.sr-only.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Enhanced focus indicators (WCAG 2.4.7 - Focus Visible) */
+*:focus-visible {
+  outline: 3px solid #D97F6F;
+  outline-offset: 2px;
+}
+
+/* Focus ring for buttons and interactive elements */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[role="link"]:focus-visible {
+  outline: 3px solid #D97F6F;
+  outline-offset: 2px;
+}
+
+/* Focus ring for inputs */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #D97F6F;
+  outline-offset: 0;
+  border-color: #D97F6F;
+}
+
+/* Enhanced focus for cards and interactive containers */
+.kanban-card:focus-visible {
+  outline: 3px solid #D97F6F;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px rgba(217, 127, 111, 0.15), 0 8px 16px rgba(47, 36, 27, 0.12);
+}
+
+/* Skip to content link */
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  z-index: 999;
+  padding: 1em;
+  background-color: white;
+  color: #2F241B;
+  text-decoration: none;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.skip-to-content:focus {
+  left: 1rem;
+  top: 1rem;
+  outline: 3px solid #D97F6F;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  *:focus-visible {
+    outline-width: 4px;
+    outline-offset: 3px;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion support (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .kanban-card {
+    transition: none;
+  }
+
+  .kanban-card:hover {
+    transform: none;
+  }
+}
+
+/* ============================================
+   RESPONSIVE DESIGN UTILITIES
+   ============================================ */
+
+/* Touch-friendly interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hide scrollbar but keep functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile responsive utilities */
+@media (max-width: 767px) {
+  /* Ensure minimum touch target size */
+  button,
+  a[role="button"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Prevent zoom on input focus */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Improve horizontal scrolling */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Tablet responsive utilities */
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Tablet-specific adjustments */
+  .sidebar-icon-only {
+    width: 80px;
+  }
+}

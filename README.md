@@ -56,6 +56,18 @@ npm start            # Service on port 20000
 - ✅ SSE Log Streaming: Real-time log viewing in dashboard
 - ✅ Agent Version Tracking: Display v3.0.0 in dashboard
 
+### 🎯 Tracker Features (NEW in v2.0)
+- ✅ **Multi-View Support**: Kanban, List, Timeline, and Gantt views
+- ✅ **Hierarchical Issues**: Epics → Stories → Tasks/Bugs
+- ✅ **Advanced Filtering**: Search, filter by type/priority/status/assignee/labels
+- ✅ **Initiatives & Teams**: Organize cross-cutting work and coordinate people
+- ✅ **Release Management**: Plan and track version releases
+- ✅ **Time Tracking**: Estimate and log time, track velocity
+- ✅ **Dependencies**: Manage blocks/blocked-by/related relationships
+- ✅ **Rich Detail Panel**: Comments, activity, time entries, documentation links
+- ✅ **Drag & Drop**: Move issues between columns and schedule on timeline
+- ✅ **URL Deep Linking**: Shareable links to specific issues and views
+
 ### 🔄 In Progress
 - Enhanced observability (Braintrust, Browserbase)
 - Automated testing infrastructure
@@ -95,36 +107,86 @@ Martha's fresh color palette:
 
 ## 📚 Documentation
 
-See `/docs` directory:
+### Tracker Documentation
+- **[API Reference](./docs/api/tracker-api.md)** - Complete REST API documentation
+- **[User Guide](./docs/user-guide/tracker-overview.md)** - Getting started with the tracker
+  - [View Modes](./docs/user-guide/view-modes.md) - Kanban, List, Timeline, Gantt
+  - [Advanced Filtering](./docs/user-guide/filtering.md) - Search and filter techniques
+  - [Initiatives & Teams](./docs/user-guide/initiatives-teams.md) - Organizing work
+  - [Releases](./docs/user-guide/releases.md) - Release planning and management
+  - [Time Tracking](./docs/user-guide/time-tracking.md) - Estimation and logging
+  - [Dependencies](./docs/user-guide/dependencies.md) - Managing relationships
+- **[Developer Guide](./docs/dev/architecture.md)** - System architecture and design
+  - [Contributing](./docs/dev/contributing.md) - How to contribute
+  - [Testing](./docs/dev/testing.md) - Testing guidelines
+  - [Performance](./docs/dev/performance.md) - Optimization tips
+- **[Migration Guide](./docs/migration/v1-to-v2.md)** - Upgrading from v1 to v2
+
+### General Documentation
 - **[CAPABILITIES.md](./docs/CAPABILITIES.md)** - Complete feature overview
 - **[ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - System design
-- **[API.md](./docs/API.md)** - API reference
+- **[API.md](./docs/API.md)** - Core API reference
 - **[PORT_ALLOCATION.md](./docs/PORT_ALLOCATION.md)** - Port strategy
 - **[BRANCHING_STRATEGY.md](./docs/BRANCHING_STRATEGY.md)** - Git workflow
 - **[DEPLOYMENT_SESSION_2026-01-11.md](./docs/DEPLOYMENT_SESSION_2026-01-11.md)** - Deployment notes
 
 ## 🔌 API Quick Reference
 
+### Core API
 ```bash
-# Core
+# Health & Monitoring
 GET  /health                              # Health check
 GET  /api/v1/worktrees                    # List all worktrees with status
 GET  /api/v1/worktrees/:name              # Get specific worktree
 GET  /api/v1/worktrees/:name/events       # Worktree event history
-
-# Monitoring
 GET  /api/v1/agents                       # List connected agents
 GET  /api/v1/clients                      # List connected clients
 GET  /api/v1/logs                         # List available log files
 GET  /api/v1/logs/:worktree               # Stream logs (SSE)
-
-# Content
 GET  /api/v1/changelog                    # Recent changelog entries
 
 # WebSocket
 WS   /ws/agent/:worktree                  # Agent connection
 WS   /ws/client/:clientId                 # Client connection
 ```
+
+### Tracker API (NEW)
+```bash
+# Worktrees & Boards
+GET    /api/tracker/worktrees                         # List worktrees
+POST   /api/tracker/worktrees                         # Create worktree
+GET    /api/tracker/worktrees/:id/boards              # List boards
+POST   /api/tracker/worktrees/:id/boards              # Create board
+
+# Issues
+GET    /api/tracker/worktrees/:wid/boards/:bid/issues          # List issues
+POST   /api/tracker/worktrees/:wid/boards/:bid/issues          # Create issue
+GET    /api/tracker/worktrees/:wid/boards/:bid/issues/:id      # Get issue
+PATCH  /api/tracker/worktrees/:wid/boards/:bid/issues/:id      # Update issue
+DELETE /api/tracker/worktrees/:wid/boards/:bid/issues/:id      # Delete issue
+POST   /api/tracker/worktrees/:wid/boards/:bid/issues/:id/move # Move issue
+
+# Initiatives, Teams, Releases
+GET    /api/tracker/worktrees/:id/initiatives         # List initiatives
+POST   /api/tracker/worktrees/:id/initiatives         # Create initiative
+GET    /api/tracker/worktrees/:id/teams               # List teams
+POST   /api/tracker/worktrees/:id/teams               # Create team
+GET    /api/tracker/worktrees/:id/releases            # List releases
+POST   /api/tracker/worktrees/:id/releases            # Create release
+
+# Comments, Activity, Time Tracking
+GET    /api/tracker/worktrees/:wid/issues/:id/comments       # List comments
+POST   /api/tracker/worktrees/:wid/issues/:id/comments       # Add comment
+GET    /api/tracker/worktrees/:wid/issues/:id/activity       # Get activity log
+POST   /api/tracker/worktrees/:wid/.../time-entries          # Log time
+GET    /api/tracker/worktrees/:wid/.../time-entries          # Get time entries
+
+# Statistics
+GET    /api/tracker/worktrees/:id/statistics          # Worktree statistics
+GET    /api/tracker/worktrees/:wid/boards/:bid/statistics  # Board statistics
+```
+
+See **[Complete API Documentation](./docs/api/tracker-api.md)** for full details.
 
 ## 🤖 Running an Agent
 

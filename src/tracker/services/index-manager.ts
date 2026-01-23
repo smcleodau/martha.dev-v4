@@ -87,6 +87,79 @@ export function addToIndex(index: IssueIndex, issue: Issue): void {
     index.by_board[issue.board_id].push(issue.id);
   }
 
+  // Add to by_initiative
+  if (issue.initiative_id) {
+    if (!index.by_initiative[issue.initiative_id]) {
+      index.by_initiative[issue.initiative_id] = [];
+    }
+    if (!index.by_initiative[issue.initiative_id].includes(issue.id)) {
+      index.by_initiative[issue.initiative_id].push(issue.id);
+    }
+  }
+
+  // Add to by_team (issue can have multiple teams)
+  if (issue.team_ids && issue.team_ids.length > 0) {
+    for (const teamId of issue.team_ids) {
+      if (!index.by_team[teamId]) {
+        index.by_team[teamId] = [];
+      }
+      if (!index.by_team[teamId].includes(issue.id)) {
+        index.by_team[teamId].push(issue.id);
+      }
+    }
+  }
+
+  // Add to by_epic
+  if (issue.epic_id) {
+    if (!index.by_epic[issue.epic_id]) {
+      index.by_epic[issue.epic_id] = [];
+    }
+    if (!index.by_epic[issue.epic_id].includes(issue.id)) {
+      index.by_epic[issue.epic_id].push(issue.id);
+    }
+  }
+
+  // Add to by_release
+  if (issue.release_id) {
+    if (!index.by_release[issue.release_id]) {
+      index.by_release[issue.release_id] = [];
+    }
+    if (!index.by_release[issue.release_id].includes(issue.id)) {
+      index.by_release[issue.release_id].push(issue.id);
+    }
+  }
+
+  // Add to by_start_date
+  if (issue.start_date) {
+    if (!index.by_start_date[issue.start_date]) {
+      index.by_start_date[issue.start_date] = [];
+    }
+    if (!index.by_start_date[issue.start_date].includes(issue.id)) {
+      index.by_start_date[issue.start_date].push(issue.id);
+    }
+  }
+
+  // Add to by_due_date
+  if (issue.due_date) {
+    if (!index.by_due_date[issue.due_date]) {
+      index.by_due_date[issue.due_date] = [];
+    }
+    if (!index.by_due_date[issue.due_date].includes(issue.id)) {
+      index.by_due_date[issue.due_date].push(issue.id);
+    }
+  }
+
+  // Add to by_assignee
+  if (issue.assignee) {
+    const assigneeId = issue.assignee.id;
+    if (!index.by_assignee[assigneeId]) {
+      index.by_assignee[assigneeId] = [];
+    }
+    if (!index.by_assignee[assigneeId].includes(issue.id)) {
+      index.by_assignee[assigneeId].push(issue.id);
+    }
+  }
+
   index.count = Object.keys(index.issues).length;
 }
 
@@ -124,6 +197,72 @@ export function removeFromIndexArrays(index: IssueIndex, issue: Issue): void {
   if (boardArr) {
     const idx = boardArr.indexOf(issue.id);
     if (idx !== -1) boardArr.splice(idx, 1);
+  }
+
+  // Remove from by_initiative
+  if (issue.initiative_id) {
+    const initiativeArr = index.by_initiative[issue.initiative_id];
+    if (initiativeArr) {
+      const idx = initiativeArr.indexOf(issue.id);
+      if (idx !== -1) initiativeArr.splice(idx, 1);
+    }
+  }
+
+  // Remove from by_team (issue can have multiple teams)
+  if (issue.team_ids && issue.team_ids.length > 0) {
+    for (const teamId of issue.team_ids) {
+      const teamArr = index.by_team[teamId];
+      if (teamArr) {
+        const idx = teamArr.indexOf(issue.id);
+        if (idx !== -1) teamArr.splice(idx, 1);
+      }
+    }
+  }
+
+  // Remove from by_epic
+  if (issue.epic_id) {
+    const epicArr = index.by_epic[issue.epic_id];
+    if (epicArr) {
+      const idx = epicArr.indexOf(issue.id);
+      if (idx !== -1) epicArr.splice(idx, 1);
+    }
+  }
+
+  // Remove from by_release
+  if (issue.release_id) {
+    const releaseArr = index.by_release[issue.release_id];
+    if (releaseArr) {
+      const idx = releaseArr.indexOf(issue.id);
+      if (idx !== -1) releaseArr.splice(idx, 1);
+    }
+  }
+
+  // Remove from by_start_date
+  if (issue.start_date) {
+    const startDateArr = index.by_start_date[issue.start_date];
+    if (startDateArr) {
+      const idx = startDateArr.indexOf(issue.id);
+      if (idx !== -1) startDateArr.splice(idx, 1);
+    }
+  }
+
+  // Remove from by_due_date
+  if (issue.due_date) {
+    const dueDateArr = index.by_due_date[issue.due_date];
+    if (dueDateArr) {
+      const idx = dueDateArr.indexOf(issue.id);
+      if (idx !== -1) dueDateArr.splice(idx, 1);
+    }
+  }
+
+  // Remove from by_assignee
+  if (issue.assignee) {
+    const assigneeId = issue.assignee.id;
+    const assigneeArr = index.by_assignee[assigneeId];
+    if (assigneeArr) {
+      const idx = assigneeArr.indexOf(issue.id);
+      if (idx !== -1) assigneeArr.splice(idx, 1);
+    }
   }
 }
 
@@ -210,4 +349,74 @@ export function getNextIssueId(index: IssueIndex): string {
   const nextId = index.next_id;
   index.next_id = nextId + 1;
   return `${prefix}-${nextId.toString().padStart(3, '0')}`;
+}
+
+/**
+ * Get all issues by initiative
+ * @param index Issue index
+ * @param initiativeId Initiative ID to filter by
+ * @returns Array of issue IDs
+ */
+export function getIssuesByInitiative(index: IssueIndex, initiativeId: string): string[] {
+  return index.by_initiative[initiativeId] || [];
+}
+
+/**
+ * Get all issues by team
+ * @param index Issue index
+ * @param teamId Team ID to filter by
+ * @returns Array of issue IDs
+ */
+export function getIssuesByTeam(index: IssueIndex, teamId: string): string[] {
+  return index.by_team[teamId] || [];
+}
+
+/**
+ * Get all issues by epic
+ * @param index Issue index
+ * @param epicId Epic ID to filter by
+ * @returns Array of issue IDs
+ */
+export function getIssuesByEpic(index: IssueIndex, epicId: string): string[] {
+  return index.by_epic[epicId] || [];
+}
+
+/**
+ * Get all issues by release
+ * @param index Issue index
+ * @param releaseId Release ID to filter by
+ * @returns Array of issue IDs
+ */
+export function getIssuesByRelease(index: IssueIndex, releaseId: string): string[] {
+  return index.by_release[releaseId] || [];
+}
+
+/**
+ * Get all issues by start date
+ * @param index Issue index
+ * @param startDate Start date to filter by (ISO 8601 format)
+ * @returns Array of issue IDs
+ */
+export function getIssuesByStartDate(index: IssueIndex, startDate: string): string[] {
+  return index.by_start_date[startDate] || [];
+}
+
+/**
+ * Get all issues by due date
+ * @param index Issue index
+ * @param dueDate Due date to filter by (ISO 8601 format)
+ * @returns Array of issue IDs
+ */
+export function getIssuesByDueDate(index: IssueIndex, dueDate: string): string[] {
+  return index.by_due_date[dueDate] || [];
+}
+
+/**
+ * Get all issues by assignee
+ * @param index Issue index
+ * @param assigneeId Assignee ID to filter by
+ * @returns Array of issue IDs
+ */
+export function getIssuesByAssignee(index: IssueIndex, assigneeId: string): string[] {
+  return index.by_assignee[assigneeId] || [];
 }

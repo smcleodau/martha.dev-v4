@@ -8,6 +8,12 @@ interface LayoutProps {
 const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
 
+  // Check if we're on a tracker page
+  const isTrackerPage = location.pathname.startsWith('/tracker');
+
+  // Check if we're on the dashboard page (full-height layout)
+  const isDashboardPage = location.pathname.startsWith('/dashboard');
+
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === path;
     return location.pathname.startsWith(path);
@@ -15,6 +21,7 @@ const Layout = ({ children }: LayoutProps) => {
 
   const navItems = [
     { path: '/', label: 'Overview', icon: '📊' },
+    { path: '/dashboard', label: 'Dashboard', icon: '🎛️' },
     { path: '/tracker', label: 'Tracker', icon: '📝' },
     { path: '/logs', label: 'Logs', icon: '📋' },
     { path: '/docs', label: 'Documentation', icon: '📚' },
@@ -23,50 +30,52 @@ const Layout = ({ children }: LayoutProps) => {
 
   return (
     <div className="min-h-screen flex bg-neutral-50">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col">
-        {/* Logo/Brand */}
-        <div className="p-6 border-b border-neutral-200">
-          <h1 className="text-2xl font-bold text-primary-600">Martha</h1>
-          <p className="text-sm text-neutral-500 mt-1">Development Dashboard</p>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`
-                flex items-center gap-3 px-4 py-3 rounded-lg font-medium
-                transition-colors duration-200
-                ${
-                  isActive(item.path)
-                    ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                    : 'text-neutral-600 hover:bg-neutral-100'
-                }
-              `}
-            >
-              <span className="text-xl">{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </nav>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-neutral-200 text-xs text-neutral-500">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span>Service Online</span>
+      {/* Global Sidebar - Only for non-tracker pages (TrackerPage renders its own sidebar) */}
+      {!isTrackerPage && (
+        <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col">
+          {/* Logo/Brand */}
+          <div className="p-6 border-b border-neutral-200">
+            <h1 className="text-2xl font-bold text-primary-600">Martha</h1>
+            <p className="text-sm text-neutral-500 mt-1">Development Dashboard</p>
           </div>
-          <div className="mt-2">Version 3.0.0</div>
-        </div>
-      </aside>
+
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-2">
+            {navItems.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`
+                  flex items-center gap-3 px-4 py-3 rounded-lg font-medium
+                  transition-colors duration-200
+                  ${
+                    isActive(item.path)
+                      ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                      : 'text-neutral-600 hover:bg-neutral-100'
+                  }
+                `}
+              >
+                <span className="text-xl">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            ))}
+          </nav>
+
+          {/* Footer */}
+          <div className="p-4 border-t border-neutral-200 text-xs text-neutral-500">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span>Service Online</span>
+            </div>
+            <div className="mt-2">Version 3.0.0</div>
+          </div>
+        </aside>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        {/* Full-height pages like tracker don't need max-w or padding */}
-        {location.pathname === '/tracker' ? (
+        {/* Full-height pages like tracker and dashboard don't need max-w or padding */}
+        {isTrackerPage || isDashboardPage ? (
           <div className="h-full">{children}</div>
         ) : (
           <div className="max-w-7xl mx-auto p-8">{children}</div>

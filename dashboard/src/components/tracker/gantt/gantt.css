@@ -1,0 +1,510 @@
+/**
+ * Gantt Chart Custom Styles
+ * Martha Tracker warm color palette styling for Frappe Gantt
+ */
+
+/* ============================================
+   GANTT CONTAINER
+   ============================================ */
+
+.gantt-chart-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #F5F1EC;
+}
+
+.gantt-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  min-height: 400px;
+}
+
+/* ============================================
+   GANTT SVG OVERRIDES
+   ============================================ */
+
+.gantt .grid-background {
+  fill: #FDFCFA;
+}
+
+.gantt .grid-header {
+  fill: #FBFAF8;
+  stroke: #E8E0D5;
+  stroke-width: 1;
+}
+
+.gantt .grid-row {
+  fill: #FFFFFF;
+}
+
+.gantt .grid-row:nth-child(even) {
+  fill: #FDFCFA;
+}
+
+.gantt .row-line {
+  stroke: #F0EBE3;
+  stroke-width: 1;
+}
+
+.gantt .tick {
+  stroke: #E8E0D5;
+  stroke-width: 0.5;
+}
+
+.gantt .today-highlight {
+  fill: #FCE8E4;
+  opacity: 0.3;
+}
+
+/* ============================================
+   TASK BARS - TYPE COLORS
+   ============================================ */
+
+/* Epic - Purple */
+.gantt .bar-wrapper.gantt-task-epic .bar {
+  fill: #8B7AA8;
+  stroke: #6B5A88;
+  stroke-width: 2;
+  rx: 4;
+  ry: 4;
+}
+
+.gantt .bar-wrapper.gantt-task-epic .bar-progress {
+  fill: #6B5A88;
+}
+
+/* Story - Coral */
+.gantt .bar-wrapper.gantt-task-story .bar {
+  fill: #D97F6F;
+  stroke: #C66656;
+  stroke-width: 2;
+  rx: 4;
+  ry: 4;
+}
+
+.gantt .bar-wrapper.gantt-task-story .bar-progress {
+  fill: #C66656;
+}
+
+/* Task - Gray */
+.gantt .bar-wrapper.gantt-task-task .bar {
+  fill: #A39686;
+  stroke: #8B7D6F;
+  stroke-width: 2;
+  rx: 4;
+  ry: 4;
+}
+
+.gantt .bar-wrapper.gantt-task-task .bar-progress {
+  fill: #8B7D6F;
+}
+
+/* Bug - Red */
+.gantt .bar-wrapper.gantt-task-bug .bar {
+  fill: #C0392B;
+  stroke: #A02818;
+  stroke-width: 2;
+  rx: 4;
+  ry: 4;
+}
+
+.gantt .bar-wrapper.gantt-task-bug .bar-progress {
+  fill: #A02818;
+}
+
+/* ============================================
+   PRIORITY INDICATORS
+   ============================================ */
+
+/* Critical Priority - Thick red left border */
+.gantt .bar-wrapper.gantt-priority-critical .bar {
+  stroke-width: 0;
+  border-left: 4px solid #C0392B;
+}
+
+/* High Priority - Thick orange left border */
+.gantt .bar-wrapper.gantt-priority-high .bar {
+  stroke-width: 0;
+  border-left: 4px solid #E8A93A;
+}
+
+/* Medium Priority - Thin gold left border */
+.gantt .bar-wrapper.gantt-priority-medium .bar {
+  stroke-width: 0;
+  border-left: 2px solid #E0B666;
+}
+
+/* Low Priority - Thin gray left border */
+.gantt .bar-wrapper.gantt-priority-low .bar {
+  stroke-width: 0;
+  border-left: 2px solid #A39686;
+}
+
+/* ============================================
+   TASK BAR STYLING
+   ============================================ */
+
+.gantt .bar-wrapper .bar {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.9;
+  filter: drop-shadow(0 2px 4px rgba(47, 36, 27, 0.1));
+}
+
+.gantt .bar-wrapper:hover .bar {
+  opacity: 1;
+  transform: translateY(-2px);
+  filter: drop-shadow(0 4px 8px rgba(47, 36, 27, 0.15));
+}
+
+.gantt .bar-wrapper .bar-label {
+  fill: #FFFFFF;
+  font-size: 12px;
+  font-weight: 500;
+  dominant-baseline: middle;
+  text-anchor: start;
+  pointer-events: none;
+  user-select: none;
+}
+
+.gantt .bar-wrapper .bar-progress {
+  opacity: 0.7;
+  rx: 4;
+  ry: 4;
+}
+
+/* ============================================
+   HANDLE (DRAG) STYLING
+   ============================================ */
+
+.gantt .handle {
+  fill: #D97F6F;
+  opacity: 0;
+  cursor: ew-resize;
+  transition: opacity 0.2s;
+}
+
+.gantt .bar-wrapper:hover .handle {
+  opacity: 0.6;
+}
+
+.gantt .handle.left {
+  rx: 4;
+  ry: 4;
+}
+
+.gantt .handle.right {
+  rx: 4;
+  ry: 4;
+}
+
+/* ============================================
+   DEPENDENCIES (ARROWS)
+   ============================================ */
+
+.gantt .arrow {
+  stroke: #D97F6F;
+  stroke-width: 2;
+  fill: none;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.gantt .arrow:hover {
+  opacity: 1;
+  stroke-width: 2.5;
+}
+
+.gantt .arrow-head {
+  fill: #D97F6F;
+  opacity: 0.8;
+}
+
+/* ============================================
+   GRID HEADER DATES
+   ============================================ */
+
+.gantt .upper-text,
+.gantt .lower-text {
+  fill: #2F241B;
+  font-size: 12px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.gantt .lower-text {
+  fill: #6B5D52;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* ============================================
+   TODAY INDICATOR
+   ============================================ */
+
+.gantt .today-highlight {
+  fill: #D97F6F;
+  opacity: 0.1;
+}
+
+/* Vertical line for today */
+.gantt .today-line {
+  stroke: #D97F6F;
+  stroke-width: 2;
+  stroke-dasharray: 4, 4;
+  opacity: 0.5;
+}
+
+/* ============================================
+   POPUP STYLING
+   ============================================ */
+
+.gantt-popup {
+  background: #FFFFFF;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 10px 20px rgba(47, 36, 27, 0.15);
+  border: 1px solid #E8E0D5;
+  min-width: 200px;
+}
+
+.gantt-popup-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2F241B;
+  margin-bottom: 8px;
+}
+
+.gantt-popup-dates {
+  font-size: 12px;
+  color: #6B5D52;
+  margin-bottom: 4px;
+}
+
+.gantt-popup-progress {
+  font-size: 12px;
+  color: #A39686;
+}
+
+.gantt .popup-wrapper {
+  background: transparent;
+  padding: 0;
+}
+
+.gantt .popup-wrapper .title {
+  display: none;
+}
+
+.gantt .popup-wrapper .subtitle {
+  display: none;
+}
+
+/* ============================================
+   HIERARCHY INDENTATION
+   ============================================ */
+
+/* Epic level (no indent) */
+.gantt .bar-wrapper[data-level="0"] {
+  /* No extra styling needed - handled by JS */
+}
+
+/* Story level (20px indent) */
+.gantt .bar-wrapper[data-level="1"] .bar {
+  /* Indentation handled by transform */
+}
+
+/* Task level (40px indent) */
+.gantt .bar-wrapper[data-level="2"] .bar {
+  /* Indentation handled by transform */
+}
+
+/* ============================================
+   SCROLLBAR STYLING
+   ============================================ */
+
+.gantt-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.gantt-container::-webkit-scrollbar-track {
+  background: #F0EBE3;
+  border-radius: 4px;
+}
+
+.gantt-container::-webkit-scrollbar-thumb {
+  background: #D4CBBD;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.gantt-container::-webkit-scrollbar-thumb:hover {
+  background: #C4BBAD;
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+  .gantt .bar-wrapper .bar-label {
+    font-size: 10px;
+  }
+
+  .gantt .upper-text,
+  .gantt .lower-text {
+    font-size: 10px;
+  }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes gantt-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gantt .bar-wrapper {
+  animation: gantt-fade-in 0.3s ease-out;
+}
+
+/* ============================================
+   SELECTION STATE
+   ============================================ */
+
+.gantt .bar-wrapper.selected .bar {
+  stroke: #D97F6F;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 8px rgba(217, 127, 111, 0.4));
+}
+
+/* ============================================
+   DRAGGING STATE
+   ============================================ */
+
+.gantt .bar-wrapper.dragging .bar {
+  opacity: 0.6;
+  cursor: grabbing;
+}
+
+/* ============================================
+   MILESTONE STYLING (for future use)
+   ============================================ */
+
+.gantt .bar-wrapper.milestone .bar {
+  transform: rotate(45deg);
+  width: 16px !important;
+  height: 16px !important;
+  fill: #E0B666;
+  stroke: #D4A54E;
+}
+
+/* ============================================
+   CUSTOM TASK CLASSES
+   ============================================ */
+
+.gantt-task-custom rect {
+  transition: all 0.2s ease;
+}
+
+.gantt-task-custom:hover rect {
+  filter: brightness(1.05);
+}
+
+/* ============================================
+   MTH-048: CRITICAL PATH STYLING
+   ============================================ */
+
+/* Critical path tasks - Red */
+.gantt .bar-wrapper.critical-task .bar {
+  fill: #C0392B !important;
+  stroke: #A02818 !important;
+  stroke-width: 3;
+  filter: drop-shadow(0 4px 8px rgba(192, 57, 43, 0.3));
+}
+
+.gantt .bar-wrapper.critical-task .bar-progress {
+  fill: #A02818 !important;
+}
+
+/* Near-critical tasks - Orange (< 2 days slack) */
+.gantt .bar-wrapper.near-critical-task .bar {
+  fill: #E8A93A !important;
+  stroke: #D49520 !important;
+  stroke-width: 2;
+  filter: drop-shadow(0 3px 6px rgba(232, 169, 58, 0.25));
+}
+
+.gantt .bar-wrapper.near-critical-task .bar-progress {
+  fill: #D49520 !important;
+}
+
+/* Circular dependency tasks - Animated warning */
+.gantt .bar-wrapper.circular-dependency-task .bar {
+  fill: #E8A93A !important;
+  stroke: #D49520 !important;
+  stroke-width: 2;
+  stroke-dasharray: 5, 5;
+  animation: critical-pulse 2s ease-in-out infinite;
+}
+
+.gantt .bar-wrapper.circular-dependency-task .bar-progress {
+  fill: #D49520 !important;
+}
+
+@keyframes critical-pulse {
+  0%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 3px 6px rgba(232, 169, 58, 0.4));
+  }
+  50% {
+    opacity: 0.7;
+    filter: drop-shadow(0 5px 10px rgba(232, 169, 58, 0.6));
+  }
+}
+
+/* ============================================
+   MTH-048: DEPENDENCY LINES
+   ============================================ */
+
+/* Hide default Frappe Gantt arrows when custom dependencies are enabled */
+.gantt.custom-dependencies .arrow {
+  display: none;
+}
+
+/* Dependency line styling is handled in DependencyLines.tsx SVG */
+
+/* ============================================
+   MTH-048: SLACK TIME TOOLTIPS
+   ============================================ */
+
+.gantt .bar-wrapper[data-slack]::after {
+  content: attr(data-slack);
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2F241B;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.gantt .bar-wrapper:hover[data-slack]::after {
+  opacity: 1;
+}

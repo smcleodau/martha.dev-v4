@@ -20,6 +20,7 @@ import { registerHookRoutes } from './routes/hooks.js';
 import { registerSwarmRoutes } from './routes/swarms.js';
 import { testRoutes } from './routes/tests.js';
 import { docsRoutes } from './routes/docs.js';
+import { seedRoutes } from './routes/seed.js';
 
 // Tracker routes
 import { issuesRoutes, hierarchicalIssuesRoutes } from '../tracker/routes/issues.js';
@@ -30,6 +31,10 @@ import { agentsRoutes } from '../tracker/routes/agents.js';
 import { authRoutes } from '../tracker/routes/auth.js';
 import { worktreesRoutes as trackerWorktreesRoutes } from '../tracker/routes/worktrees.js';
 import { documentationRoutes, issueDocumentationRoutes } from '../tracker/routes/documentation.js';
+import { initiativesRoutes } from '../tracker/routes/initiatives.js';
+import { teamsRoutes } from '../tracker/routes/teams.js';
+import { releasesRoutes } from '../tracker/routes/releases.js';
+import { statisticsRoutes } from '../tracker/routes/statistics.js';
 
 const serverLogger = createLogger({ module: 'fastify' });
 
@@ -108,6 +113,7 @@ export async function createServer() {
   await server.register(testRoutes);
   await server.register(dashboardRoutes); // Changelog API
   await server.register(docsRoutes); // Documentation API
+  await server.register(seedRoutes, { prefix: '/api/v1/seed' }); // Seed data API
 
   // Register tracker routes (backward compatible)
   await server.register(authRoutes, { prefix: '/api/tracker/auth' });
@@ -132,6 +138,26 @@ export async function createServer() {
   });
   await server.register(issueDocumentationRoutes, {
     prefix: '/api/tracker/worktrees/:worktreeId/issues/:issueId/documentation',
+  });
+
+  // Register initiatives routes
+  await server.register(initiativesRoutes, {
+    prefix: '/api/tracker/worktrees/:worktreeId/initiatives',
+  });
+
+  // Register teams routes
+  await server.register(teamsRoutes, {
+    prefix: '/api/tracker/worktrees/:worktreeId/teams',
+  });
+
+  // Register releases routes
+  await server.register(releasesRoutes, {
+    prefix: '/api/tracker/worktrees/:worktreeId/releases',
+  });
+
+  // Register statistics routes
+  await server.register(statisticsRoutes, {
+    prefix: '/api/tracker/worktrees/:worktreeId/boards/:boardId/stats',
   });
 
   serverLogger.info('Tracker routes registered');

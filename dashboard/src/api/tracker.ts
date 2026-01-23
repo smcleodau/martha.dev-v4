@@ -74,6 +74,11 @@ export interface QualityInfo {
   checklist: string[];
 }
 
+export interface TimeTracking {
+  estimated_hours: number | null;
+  logged_hours: number;
+}
+
 export interface Issue {
   id: string;
   worktree_id: string;
@@ -91,6 +96,7 @@ export interface Issue {
   } | null;
   labels: string[];
   quality: QualityInfo;
+  time_tracking: TimeTracking;
   documentation: DocumentationLinks;
   links: Links;
   metadata: {
@@ -98,6 +104,22 @@ export interface Issue {
     updated_at: string;
     version: number;
   };
+
+  // Phase 1.1: Data Model Extensions
+  initiative_id?: string | null;
+  team_ids?: string[];
+  story_points?: number | null;
+  epic_id?: string | null;
+  release_id?: string | null;
+  start_date?: string | null;
+  due_date?: string | null;
+  estimated_duration?: number | null;
+  dependencies?: {
+    blocks: string[];
+    blocked_by: string[];
+    related: string[];
+  };
+  watchers?: string[];
 }
 
 export interface BoardColumn {
@@ -617,6 +639,217 @@ export const activityApi = {
     return request<ActivityEntry[]>(
       `/worktrees/${worktreeId}/issues/${issueId}/activity?since=${since}`
     );
+  },
+};
+
+// Phase 1.1: New Types
+export interface Initiative {
+  id: string;
+  worktree_id: string;
+  name: string;
+  description: string;
+  color: string;
+  status: 'planning' | 'active' | 'completed' | 'archived';
+  owner: {
+    id: string;
+    name: string;
+    avatar: string;
+  } | null;
+  epic_ids: string[];
+  metadata: {
+    created_at: string;
+    updated_at: string;
+    start_date: string | null;
+    end_date: string | null;
+  };
+}
+
+export interface Team {
+  id: string;
+  worktree_id: string;
+  name: string;
+  description: string;
+  color: string;
+  members: Array<{
+    id: string;
+    name: string;
+    avatar: string;
+  }>;
+  metadata: {
+    created_at: string;
+    updated_at: string;
+  };
+}
+
+export interface InitiativeStats {
+  total_epics: number;
+  total_stories: number;
+  total_tasks: number;
+  completed_percentage: number;
+  by_status: Record<string, number>;
+  team_distribution: Record<string, number>;
+}
+
+export interface TeamStats {
+  total_issues: number;
+  active_issues: number;
+  completed_issues: number;
+  by_type: Record<string, number>;
+  by_priority: Record<string, number>;
+  velocity: {
+    current_sprint: number;
+    average: number;
+  };
+}
+
+export interface BoardStatistics {
+  total_issues: number;
+  by_status: Record<string, number>;
+  by_type: Record<string, number>;
+  by_priority: Record<string, number>;
+  by_assignee: Record<string, number>;
+  cycle_time: {
+    average: number;
+    median: number;
+  };
+  throughput: {
+    last_week: number;
+    last_month: number;
+  };
+}
+
+export interface CreateInitiativeRequest {
+  name: string;
+  description: string;
+  color?: string;
+  status?: Initiative['status'];
+  owner?: {
+    id: string;
+    name: string;
+    avatar: string;
+  };
+  epic_ids?: string[];
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface UpdateInitiativeRequest {
+  name?: string;
+  description?: string;
+  color?: string;
+  status?: Initiative['status'];
+  owner?: {
+    id: string;
+    name: string;
+    avatar: string;
+  } | null;
+  epic_ids?: string[];
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface CreateTeamRequest {
+  name: string;
+  description: string;
+  color?: string;
+  members?: Array<{
+    id: string;
+    name: string;
+    avatar: string;
+  }>;
+}
+
+export interface UpdateTeamRequest {
+  name?: string;
+  description?: string;
+  color?: string;
+  members?: Array<{
+    id: string;
+    name: string;
+    avatar: string;
+  }>;
+}
+
+// Initiatives API
+export const initiativesApi = {
+  list: async (worktreeId: string): Promise<Initiative[]> => {
+    const response = await request<{ initiatives: Initiative[]; count: number }>(
+      `/worktrees/${worktreeId}/initiatives`
+    );
+    return response.initiatives || [];
+  },
+
+  get: (worktreeId: string, id: string): Promise<Initiative> => {
+    return request<Initiative>(`/worktrees/${worktreeId}/initiatives/${id}`);
+  },
+
+  create: (worktreeId: string, data: CreateInitiativeRequest): Promise<Initiative> => {
+    return request<Initiative>(`/worktrees/${worktreeId}/initiatives`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: (worktreeId: string, id: string, data: UpdateInitiativeRequest): Promise<Initiative> => {
+    return request<Initiative>(`/worktrees/${worktreeId}/initiatives/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: (worktreeId: string, id: string): Promise<void> => {
+    return request<void>(`/worktrees/${worktreeId}/initiatives/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getStats: (worktreeId: string, id: string): Promise<InitiativeStats> => {
+    return request<InitiativeStats>(`/worktrees/${worktreeId}/initiatives/${id}/stats`);
+  },
+};
+
+// Teams API
+export const teamsApi = {
+  list: async (worktreeId: string): Promise<Team[]> => {
+    const response = await request<{ teams: Team[]; count: number }>(
+      `/worktrees/${worktreeId}/teams`
+    );
+    return response.teams || [];
+  },
+
+  get: (worktreeId: string, id: string): Promise<Team> => {
+    return request<Team>(`/worktrees/${worktreeId}/teams/${id}`);
+  },
+
+  create: (worktreeId: string, data: CreateTeamRequest): Promise<Team> => {
+    return request<Team>(`/worktrees/${worktreeId}/teams`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: (worktreeId: string, id: string, data: UpdateTeamRequest): Promise<Team> => {
+    return request<Team>(`/worktrees/${worktreeId}/teams/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: (worktreeId: string, id: string): Promise<void> => {
+    return request<void>(`/worktrees/${worktreeId}/teams/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getStats: (worktreeId: string, id: string): Promise<TeamStats> => {
+    return request<TeamStats>(`/worktrees/${worktreeId}/teams/${id}/stats`);
+  },
+};
+
+// Statistics API
+export const statisticsApi = {
+  getBoardStats: async (worktreeId: string, boardId: string): Promise<BoardStatistics> => {
+    return request<BoardStatistics>(`/worktrees/${worktreeId}/boards/${boardId}/statistics`);
   },
 };
 

@@ -80,6 +80,81 @@ export default {
           400: '#ead5b8',
           500: '#d4b896',
         },
+        // Tracker warm color palette - for sophisticated project tracking UI
+        tracker: {
+          // Background colors
+          bg: {
+            DEFAULT: '#F5F1EC',      // Main board background
+            card: '#FFFFFF',          // Card background
+            subtle: '#FDFCFA',        // Subtle panels
+            column: '#FBFAF8',        // Column headers
+          },
+          // Text colors (warm browns)
+          text: {
+            DEFAULT: '#2F241B',       // Primary text
+            muted: '#6B5D52',         // Secondary text
+            light: '#A39686',         // Tertiary text
+          },
+          // Border colors
+          border: {
+            DEFAULT: '#E8E0D5',       // Default borders
+            light: '#F0EBE3',         // Light borders
+            dark: '#D4CBBD',          // Darker borders
+          },
+          // Primary accent (coral/salmon)
+          coral: {
+            50: '#FDF5F3',
+            100: '#FCE8E4',
+            200: '#F9D0C8',
+            300: '#F5B1A4',
+            400: '#E69180',
+            500: '#D97F6F',          // Main coral
+            600: '#C66656',
+            700: '#A54E41',
+            800: '#7D3A30',
+            900: '#562821',
+          },
+          // Secondary accent (warm gold)
+          gold: {
+            50: '#FDF9EF',
+            100: '#FBF1D9',
+            200: '#F7E3B3',
+            300: '#F1D288',
+            400: '#E8C163',
+            500: '#E0B666',          // Main gold
+            600: '#D4A54E',
+            700: '#B88C3A',
+            800: '#8F6B2C',
+            900: '#654C1F',
+          },
+          // Status colors
+          status: {
+            success: '#52A560',
+            warning: '#E8A93A',
+            error: '#C0392B',
+            info: '#6B9BD1',
+          },
+          // Type badge colors
+          type: {
+            epic: '#8B7AA8',
+            story: '#D97F6F',
+            task: '#A39686',
+            bug: '#C0392B',
+          },
+        },
+        // Standalone coral colors for filters
+        coral: {
+          50: '#FDF5F3',
+          100: '#FCE8E4',
+          200: '#F9D0C8',
+          300: '#F5B1A4',
+          400: '#E69180',
+          500: '#D97F6F',          // Main coral
+          600: '#C66656',
+          700: '#A54E41',
+          800: '#7D3A30',
+          900: '#562821',
+        },
       },
       fontFamily: {
         sans: ['Inter var', 'Inter', 'system-ui', 'sans-serif'],
@@ -89,6 +164,8 @@ export default {
         'fade-in': 'fadeIn 0.5s ease-in-out',
         'slide-up': 'slideUp 0.3s ease-out',
         'slide-down': 'slideDown 0.3s ease-out',
+        'pulse-live': 'pulseLive 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'scale-in': 'scaleIn 0.2s ease-out',
       },
       keyframes: {
         fadeIn: {
@@ -103,6 +180,21 @@ export default {
           '0%': { transform: 'translateY(-10px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
+        pulseLive: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.4' },
+        },
+        scaleIn: {
+          '0%': { transform: 'scale(0.95)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+      },
+      boxShadow: {
+        'warm-sm': '0 1px 3px rgba(47, 36, 27, 0.08)',
+        'warm-md': '0 4px 6px rgba(47, 36, 27, 0.1)',
+        'warm-lg': '0 10px 20px rgba(47, 36, 27, 0.12)',
+        'warm-xl': '0 20px 30px rgba(47, 36, 27, 0.15)',
+        'coral-glow': '0 0 0 3px rgba(217, 127, 111, 0.1)',
       },
     },
   },

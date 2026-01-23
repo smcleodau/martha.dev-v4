@@ -61,6 +61,28 @@ export interface Issue {
   documentation: DocumentationLinks;      // NEW: Links to documentation
   github_sync: GitHubSync;
   metadata: IssueMetadata;
+
+  // Phase 1.1: Data Model Extensions
+  initiative_id: string | null;           // Link to initiative
+  team_ids: string[];                     // Multiple teams per issue
+  story_points: number | null;            // Estimation points
+  epic_id: string | null;                 // Direct epic reference (separate from parent_id)
+  release_id: string | null;              // Target release
+  start_date: string | null;              // For Timeline/Gantt (ISO 8601)
+  due_date: string | null;                // For Timeline/Gantt (ISO 8601)
+  estimated_duration: number | null;      // Hours, for Gantt resource planning
+  dependencies: {
+    blocks: string[];                     // Issues this blocks
+    blocked_by: string[];                 // Issues blocking this
+    related: string[];                    // Related issues
+  };
+  watchers: string[];                     // User IDs watching this
+  policy_compliance: PolicyCompliance | null;  // Security, testing, docs, code review
+  engagement: {
+    views: number;
+    total_read_time: number;              // seconds
+    view_history: ViewEntry[];
+  };
 }
 
 export interface IndexEntry {
@@ -86,6 +108,15 @@ export interface IssueIndex {
   by_type: Record<string, string[]>;
   by_board: Record<string, string[]>;     // NEW: Issues grouped by board
   updated_at: string;
+
+  // Phase 1.1: New index groupings
+  by_initiative: Record<string, string[]>;
+  by_team: Record<string, string[]>;
+  by_epic: Record<string, string[]>;
+  by_release: Record<string, string[]>;
+  by_start_date: Record<string, string[]>;
+  by_due_date: Record<string, string[]>;
+  by_assignee: Record<string, string[]>;
 }
 
 export interface BoardColumn {
@@ -217,6 +248,134 @@ export interface AgentSessionIndex {
     sessions_by_status: Record<SessionStatus, number>;
   };
   updated_at: string;
+}
+
+// Phase 1.1: New Models
+export interface Initiative {
+  id: string;
+  worktree_id: string;
+  name: string;
+  description: string;
+  color: string;                          // Hex color for UI
+  status: 'planning' | 'active' | 'completed' | 'archived';
+  owner: Assignee | null;
+  epic_ids: string[];
+  metadata: {
+    created_at: string;
+    updated_at: string;
+    start_date: string | null;
+    end_date: string | null;
+  };
+}
+
+export interface Team {
+  id: string;
+  worktree_id: string;
+  name: string;
+  description: string;
+  color: string;
+  members: Assignee[];
+  metadata: {
+    created_at: string;
+    updated_at: string;
+  };
+}
+
+export interface Release {
+  id: string;
+  worktree_id: string;
+  name: string;
+  version: string;
+  target_date: string;
+  description: string;
+  gates: ReleaseGate[];
+  issue_ids: string[];
+  status: 'planning' | 'in_progress' | 'testing' | 'released' | 'cancelled';
+  metadata: {
+    created_at: string;
+    updated_at: string;
+    version: number;
+  };
+}
+
+export interface ReleaseGate {
+  id: string;
+  name: string;
+  type: 'security' | 'testing' | 'documentation' | 'review' | 'deployment' | 'custom';
+  status: 'passed' | 'failed' | 'pending' | 'skipped';
+  required: boolean;
+  description: string;
+  metadata?: Record<string, any>;
+}
+
+export interface PolicyCompliance {
+  security: {
+    status: 'compliant' | 'non_compliant' | 'partial' | 'n/a';
+    checks: Array<{
+      name: string;
+      passed: boolean;
+      details?: string;
+    }>;
+    last_checked: string | null;
+  };
+  testing: {
+    status: 'compliant' | 'non_compliant' | 'partial' | 'n/a';
+    checks: Array<{
+      name: string;
+      passed: boolean;
+      details?: string;
+    }>;
+    last_checked: string | null;
+  };
+  code_review: {
+    status: 'compliant' | 'non_compliant' | 'partial' | 'n/a';
+    checks: Array<{
+      name: string;
+      passed: boolean;
+      details?: string;
+    }>;
+    last_checked: string | null;
+  };
+  documentation: {
+    status: 'compliant' | 'non_compliant' | 'partial' | 'n/a';
+    checks: Array<{
+      name: string;
+      passed: boolean;
+      details?: string;
+    }>;
+    last_checked: string | null;
+  };
+}
+
+export interface ViewEntry {
+  user_id: string;
+  user_name: string;
+  timestamp: string;
+  read_time: number;  // seconds
+  session_id: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  issue_id: string;
+  user_id: string;
+  user_name: string;
+  hours: number;
+  description: string;
+  date: string;       // ISO date when work was done
+  logged_at: string;  // ISO timestamp when entry was created
+}
+
+export interface PRMetadata {
+  url: string;
+  status: 'draft' | 'open' | 'approved' | 'merged' | 'closed';
+  commits: number;
+  authors: number;
+  reviews_requested: number;
+  approvals: number;
+  ci_status: 'passing' | 'failing' | 'pending' | 'unknown';
+  test_coverage: number | null;
+  last_updated: string;
 }
 
 // Tracker Events
